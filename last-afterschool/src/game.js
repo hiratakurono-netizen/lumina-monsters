@@ -448,7 +448,7 @@ function loadAll() {
   Object.values(SPRITE_DATA.monsters).forEach(m => paths.add(m.img));
   Object.values(SPRITE_DATA.portraits).forEach(p => paths.add(p));
   paths.add(SPRITE_DATA.keyart);
-  return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = p; IMG[p] = i; })));
+  return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));
 }
 
 function fit() {

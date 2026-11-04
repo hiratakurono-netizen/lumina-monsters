@@ -33,7 +33,7 @@ const Audio2 = (() => {
     fadeTo(0, el.paused ? 0 : 350, () => {
       if (bgmKey !== key) return;
       if (!src) { el.pause(); return; }
-      el.src = src; el.currentTime = 0;
+      el.src = (window.ASSET_MAP && window.ASSET_MAP[src]) || src; el.currentTime = 0;
       const p = el.play();
       if (p && p.catch) p.then(() => { pending = false; }).catch(() => { pending = true; });
       fadeTo(muted ? 0 : BGM_VOL, 700);

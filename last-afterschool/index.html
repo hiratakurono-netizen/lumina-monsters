@@ -22,11 +22,11 @@
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); overflow: hidden; touch-action: none;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
   body { font-family: 'DotGothic16', 'Hiragino Sans', monospace; }
-  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  #wrap { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
     padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; background: var(--stage); touch-action: none; }
-  #touch { display: none; position: fixed; inset: 0; pointer-events: none; }
+  #touch { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
   body.touch #touch { display: block; }
   .btn { position: absolute; pointer-events: auto; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--edge);
     background: var(--btn); color: var(--ink); font: 12px 'DotGothic16', monospace; display: flex; align-items: center;
@@ -45,9 +45,10 @@
   [data-btn="special"] { right: calc(22px + var(--b) * 1.15 + env(safe-area-inset-right, 0px)); bottom: calc(22px + var(--b) * 1.2 + env(safe-area-inset-bottom, 0px)); border-color: var(--gold); }
   [data-btn="swap"]    { right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(40px + var(--b) * 1.5 + env(safe-area-inset-bottom, 0px)); }
   [data-btn="pause"]   { right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(44px + env(safe-area-inset-top, 0px)); border-radius: 10px; }
-  #rotate { display: none; position: fixed; inset: 0; z-index: 5; background: var(--bg); color: var(--ink);
-    flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; font-size: 18px;
+  #rotate { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5; background: var(--bg); color: var(--ink);
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 18px;
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #rotate > div { margin: 9px 0; }
   #rotate .ph { width: 54px; height: 92px; border: 3px solid var(--ink); border-radius: 10px; animation: rot 2s ease-in-out infinite; }
   @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
   @media (prefers-reduced-motion: reduce) { #rotate .ph { animation: none; transform: rotate(-90deg); } }
