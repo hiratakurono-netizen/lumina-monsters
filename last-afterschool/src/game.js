@@ -445,7 +445,9 @@ const Game = {
 function loadAll() {
   const paths = new Set();
   Object.values(SPRITE_DATA.heroine).forEach(a => paths.add(a.img));
-  Object.values(SPRITE_DATA.monsters).forEach(m => paths.add(m.img));
+  // 使うモンスターだけ読み込む（シートから切り出した残りは今後のステージ用）
+  const used = new Set(['wyrmling']); Object.values(ENEMIES).forEach(e => used.add(e.spr));
+  used.forEach(k => paths.add(SPRITE_DATA.monsters[k].img));
   Object.values(SPRITE_DATA.portraits).forEach(p => paths.add(p));
   paths.add(SPRITE_DATA.keyart);
   return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));

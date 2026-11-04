@@ -11,9 +11,13 @@ html = open(os.path.join(ROOT, 'index.html'), encoding='utf-8').read()
 
 MIME = {'.png': 'image/png', '.mp3': 'audio/mpeg'}
 assets = {}
+config = open(os.path.join(ROOT, 'src', 'config.js'), encoding='utf-8').read()
+used_mon = set(re.findall(r"spr: '(\w+)'", config)) | {'wyrmling'}
 for d in ('assets/sprites', 'assets/bgm'):
     for f in sorted(os.listdir(os.path.join(ROOT, d))):
         ext = os.path.splitext(f)[1]
+        if f.startswith('mon_') and f[4:-4] not in used_mon:
+            continue  # unused monster sprites are left out
         if ext in MIME:
             data = open(os.path.join(ROOT, d, f), 'rb').read()
             assets[f'{d}/{f}'] = f'data:{MIME[ext]};base64,' + base64.b64encode(data).decode()

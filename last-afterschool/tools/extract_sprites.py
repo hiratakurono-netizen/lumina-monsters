@@ -12,6 +12,20 @@ from collections import deque
 import numpy as np
 from PIL import Image
 
+
+def save_small(img, path):
+    """Save as a palette PNG (<=255 colours + transparency): ~1/3 the size, same look for pixel art."""
+    img = img.convert('RGBA')
+    a = np.asarray(img)
+    rgb = Image.fromarray(a[:, :, :3])
+    q = rgb.quantize(colors=255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    idx = np.asarray(q).copy()
+    idx[a[:, :, 3] < 128] = 255
+    out = Image.fromarray(idx.astype(np.uint8), 'P')
+    pal = q.getpalette()[:255 * 3] + [0, 0, 0]
+    out.putpalette(pal)
+    out.save(path, optimize=True, transparency=255)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'assets', 'source')
 OUT = os.path.join(ROOT, 'assets', 'sprites')
@@ -110,7 +124,7 @@ def pack(name, frames):
     med = int(np.median([m['ax'] for m in meta]))
     for m in meta:
         if abs(m['ax'] - med) > 12: m['ax'] = med
-    strip.save(os.path.join(OUT, f'heroine_{name}.png'))
+    save_small(strip, os.path.join(OUT, f'heroine_{name}.png'))
     return {'img': f'assets/sprites/heroine_{name}.png', 'frames': meta}
 
 # --- monsters: dark navy background, flood fill from edges of each bbox -------------
@@ -199,7 +213,7 @@ def main():
     m = load('sheet_monsters.png')
     for name, box in MONSTERS.items():
         img = key_monster(m, box)
-        img.save(os.path.join(OUT, f'mon_{name}.png'))
+        save_small(img, os.path.join(OUT, f'mon_{name}.png'))
         data['monsters'][name] = {'img': f'assets/sprites/mon_{name}.png', 'w': img.width, 'h': img.height}
 
     # expression portraits (square crops, kept opaque) from the basic sheet
@@ -211,7 +225,7 @@ def main():
         data['portraits'][k] = f'assets/sprites/face_{k}.png'
     # key art for title screen
     art = basic.crop((0, 0, 320, 250))
-    art.save(os.path.join(OUT, 'keyart.png'))
+    art.convert('RGB').quantize(colors=256, method=Image.Quantize.MEDIANCUT).save(os.path.join(OUT, 'keyart.png'), optimize=True)
     data['keyart'] = 'assets/sprites/keyart.png'
 
     with open(os.path.join(ROOT, 'src', 'sprite_data.js'), 'w') as f:
