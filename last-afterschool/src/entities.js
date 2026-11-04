@@ -5,7 +5,8 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const overlap = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 const fmt = s => s.replace(/\{(\w+)\}/g, (_, k) => NAMES[k] || k);
 
-function heroFrame(anim, i) { const a = SPRITE_DATA.heroine[anim]; return [IMG[a.img], a.frames[Math.min(i, a.frames.length - 1)]]; }
+function spriteSet(anim) { return anim.startsWith('swing_') ? SPRITE_DATA.swing[anim.slice(6)] : SPRITE_DATA.heroine[anim]; }
+function heroFrame(anim, i) { const a = spriteSet(anim); return [IMG[a.img], a.frames[Math.min(i, a.frames.length - 1)]]; }
 function drawHero(ctx, anim, i, x, y, face, scale = HERO_SCALE * (ANIM_SCALE[anim] || 1)) {
   const [img, f] = heroFrame(anim, i);
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); if (face < 0) ctx.scale(-1, 1);
@@ -30,6 +31,7 @@ const WEAPON_ART = {
   desk:  { file: 'assets/weapons/weapon_desk.png',  grip: [8, 52], rot: -90, tip: [58, -30], S: 1.25 },
 };
 const HAND = { x: 22, y: -80 };  // 体の基準点から見た手の位置（ワールド、向き=+1）
+const HOLD_ANGLE = { bat: -28, chair: -18, desk: -20 }; // 持ち歩き時の角度（度・前方が+90）
 
 // =====================================================================
 //  Player
@@ -48,6 +50,7 @@ class Player {
     this.guarding = false; this.dodgeT = 0; this.dodgeCD = 0; this.ghosts = [];
   }
   get weapon() { return this.weapons.length ? this.weapons[this.wIdx] : null; }
+  weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return w ? (WEIGHT_SPEED[w.size] || 1) : 1; }
   get element() { if (this.fire) return 'fire'; const w = this.atk ? WEAPONS[this.atk.key] : (this.weapon && WEAPONS[this.weapon]); return (w && w.element) || 'none'; }
   setFace(f, t = 1.2) { this.faceOverride = f; this.faceTimer = t; }
   get portrait() {
@@ -103,7 +106,7 @@ class Player {
     this.inv -= dt; this.hurtT -= dt; this.faceTimer -= dt; this.dodgeCD -= dt;
     this.ghosts.forEach(g => g.t += dt); this.ghosts = this.ghosts.filter(g => g.t < 0.3);
     const control = !this.locked && !W.dialogue && W.state === 'play';
-    const guardHeld = control && !!I.held.guard;
+    const guardHeld = control && !!I.held.guard && this.weapons.length > 0;
 
     if (this.state === 'dodge') { // 緊急回避：無敵つき
       this.dodgeT -= dt; this.inv = Math.max(this.inv, 0.05);
@@ -130,7 +133,7 @@ class Player {
           this.frame = a.frame; this.enterFrame();
         }
       }
-      if (this.atk) { this.frame = def.weapon ? 0 : this.atk.frame; this.updateTrail(this.atk, dt); }
+      if (this.atk) { this.frame = def.swing || !def.weapon ? this.atk.frame : 0; this.updateTrail(this.atk, dt); }
       else this.frame = 0;
       return this.physics(dt);
     }
@@ -166,7 +169,7 @@ class Player {
       return this.physics(dt);
     }
     const run = control && I.dash && move !== 0 && !this.guarding;
-    const speed = this.guarding ? 110 : run ? 340 : 190;
+    const speed = (this.guarding ? 110 : run ? 340 : 190) * this.weightSpeed();
     this.vx = move * speed;
     if (move) this.face = move;
     if (this.guarding) { this.anim = 'idle'; this.frame = 0; this.ft = 0; }
@@ -244,6 +247,7 @@ class Player {
     ctx.globalAlpha = 1;
     if (this.guarding) this.drawGuard(ctx, cam);
     if (this.atk) this.drawWeapon(ctx, cam);
+    else this.drawHeld(ctx, cam);
   }
   drawGuard(ctx, cam) {
     const x = this.x - cam + this.face * 30, y = this.y - 70;
@@ -251,6 +255,18 @@ class Player {
     ctx.strokeStyle = 'rgba(160,220,255,.85)'; ctx.lineWidth = 5;
     ctx.beginPath(); ctx.arc(x, y, 42, this.face > 0 ? -1.2 : Math.PI - 1.2, this.face > 0 ? 1.2 : Math.PI + 1.2); ctx.stroke();
     ctx.fillStyle = 'rgba(120,200,255,.18)'; ctx.fill(); ctx.restore();
+  }
+  // 歩き・走り・待機中も武器を手に持つ（構えの角度は HOLD_ANGLE）
+  drawHeld(ctx, cam) {
+    const key = this.weapon; if (!key || !WEAPON_ART[key] || this.state === 'dodge' || this.state === 'hurt') return;
+    const art = WEAPON_ART[key], img = IMG[art.file];
+    const ang = (HOLD_ANGLE[key] + art.rot) * Math.PI / 180;
+    ctx.save();
+    ctx.translate(Math.round(this.x - cam + this.face * HAND.x), Math.round(this.y + HAND.y + (this.onGround && this.anim !== 'idle' ? Math.sin(performance.now() / 110) * 2 : 0)));
+    ctx.scale(this.face, 1); ctx.rotate(ang);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, -art.grip[0] * art.S, -art.grip[1] * art.S, img.width * art.S, img.height * art.S);
+    ctx.restore();
   }
   drawWeapon(ctx, cam) {
     const a = this.atk, key = a.def.weapon; if (!key) return;
@@ -267,7 +283,8 @@ class Player {
       ctx.beginPath(); pts.forEach((p, i) => { const jx = (Math.random() - 0.5) * jit; i ? ctx.lineTo(p.x + jx, p.y) : ctx.moveTo(p.x, p.y); }); ctx.stroke();
       ctx.restore();
     }
-    // 武器本体：持ち手（grip）を手の位置に合わせ、その点を中心に回す
+    if (a.def.swing) return; // 振りのコマに武器が描かれている
+    // 武器本体（連続回転の武器）：持ち手（grip）を手の位置に合わせ、その点を中心に回す
     const ang = (this.weaponAngle(a) + art.rot) * Math.PI / 180;
     const img = IMG[art.file];
     ctx.save();

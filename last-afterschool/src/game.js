@@ -363,6 +363,8 @@ const Game = {
       return;
     }
     if (Input.hit('pause') && !W.dialogue && W.state === 'play') { this.paused = true; this.pauseIdx = 0; Input.endFrame(); return; }
+    // 武器を持っていない時はガードボタンを出さない
+    const gb = document.querySelector('[data-btn="guard"]'); if (gb) gb.hidden = W.player.weapons.length === 0;
     W.update(Math.min(dt, 1 / 30));
   },
   d_play() {
@@ -450,6 +452,7 @@ function loadAll() {
   const used = new Set(['wyrmling']); Object.values(ENEMIES).forEach(e => used.add(e.spr));
   used.forEach(k => paths.add(SPRITE_DATA.monsters[k].img));
   Object.values(SPRITE_DATA.portraits).forEach(p => paths.add(p));
+  Object.values(SPRITE_DATA.swing).forEach(a => paths.add(a.img));
   paths.add(SPRITE_DATA.keyart);
   Object.values(WEAPON_ART).forEach(w => paths.add(w.file));
   return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));

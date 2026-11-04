@@ -7,6 +7,8 @@ const VIEW_W = 960, VIEW_H = 540;
 const GROUND_Y = 468;
 // 主人公の表示倍率。キックの行は元シートで大きめに描かれているので個別に補正
 const HERO_SCALE = 1.25;
+// 武器を持っている時の移動速度（重いほど遅い）
+const WEIGHT_SPEED = { S: 1.0, M: 0.88, L: 0.74 };
 const ANIM_SCALE = { kick: 0.77, swingS: 1.06, swingM: 1.06, swingL: 1.06, swingL2: 1.06 };
 
 // 名前はすべて仮。ここを書き換えれば全セリフに反映される。
@@ -37,33 +39,33 @@ const WEAPONS = {
     hits: [{ frame: 2, dmg: 9, box: [5, -110, 105, -30], kb: 260, launch: 0, stop: 60 }],
     step: [0, 30, 60, 0, 0], cancelAt: 3,
   },
+  // 振りは sheet_weapon_motion のコマ（SPRITE_DATA.swing）。arc は先端位置の計算（属性の軌跡）用の近似。
   bat: {
-    name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'idle', size: 'S', weapon: 'bat', element: 'sand',
-    frameMs: [60, 60, 70, 80, 90],
-    arc: [-130, -60, 20, 80, 110],
+    name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swing_bat', swing: 'bat', size: 'S', weapon: 'bat', element: 'sand',
+    frameMs: [60, 60, 50, 70, 70, 80, 80, 100],
+    arc: [-120, -100, -60, 40, 70, 60, 40, 30],
     hits: [
-      { frame: 1, dmg: 11, box: [-10, -140, 110, -5], kb: 150, stop: 50 },
-      { frame: 2, dmg: 14, box: [-10, -140, 120, -5], kb: 200, stop: 60 },
-      { frame: 3, dmg: 16, box: [-20, -145, 130, -5], kb: 260, launch: 200, stop: 70 },
+      { frame: 2, dmg: 10, box: [-10, -140, 110, -5], kb: 150, stop: 50 },
+      { frame: 3, dmg: 18, box: [-10, -140, 130, -5], kb: 260, launch: 200, stop: 70, shake: 5 },
     ],
-    step: [0, 30, 50, 40, 0], cancelAt: 3,
+    step: [0, 0, 30, 50, 40, 0, 0, 0], cancelAt: 4,
   },
   chair: {
-    name: '椅子', from: '椅子', icon: 'chair', anim: 'idle', size: 'M', weapon: 'chair',
-    frameMs: [80, 80, 90, 100, 120],
-    arc: [-140, -70, 10, 70, 100],
+    name: '椅子', from: '椅子', icon: 'chair', anim: 'swing_chair', swing: 'chair', size: 'M', weapon: 'chair',
+    frameMs: [90, 90, 80, 80, 120, 120, 120, 120],
+    arc: [-110, -70, 20, 60, 70, 70, 70, 70],
     hits: [
-      { frame: 1, dmg: 16, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
+      { frame: 1, dmg: 14, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
       { frame: 2, dmg: 20, box: [-20, -140, 140, -5], kb: 300, launch: 180, stop: 80, shake: 6 },
     ],
-    step: [0, 40, 60, 0, 0], cancelAt: 3,
+    step: [0, 40, 60, 0, 0, 0, 0, 0], cancelAt: 3,
   },
   desk: {
-    name: '机のグレートソード', from: '机', icon: 'desk', anim: 'idle', size: 'L', weapon: 'desk',
-    frameMs: [180, 100, 80, 180, 160],
-    arc: [-150, -80, 0, 70, 110],
-    hits: [{ frame: 2, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
-    step: [0, 30, 50, 0, 0], cancelAt: 3, next: 'desk2',
+    name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk',
+    frameMs: [120, 110, 100, 160, 160, 140, 140, 150, 150],
+    arc: [-120, -90, -40, 60, 70, 70, 70, 70, 70],
+    hits: [{ frame: 3, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
+    step: [0, 30, 50, 0, 0, 0, 0, 0, 0], cancelAt: 3, next: 'desk2',
   },
   desk2: {
     name: '回転斬り', anim: 'idle', size: 'L', weapon: 'desk', hidden: true,

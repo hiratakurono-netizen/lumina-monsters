@@ -200,9 +200,69 @@ def key_monster(a, box, tol=30):
     bb = img.getbbox()
     return img.crop(bb) if bb else img
 
+
+# ---------------------------------------------------------------------------
+#  武器の振りモーション（sheet_weapon_motion.jpg：武器を持った全身コマ）
+# ---------------------------------------------------------------------------
+SWING_SHEET = 'sheet_weapon_motion.jpg'
+SWING_CELLS = {
+    'bat':   (272, 396, [(17, 149), (160, 292), (303, 436), (438, 562), (572, 696), (706, 829), (839, 962), (972, 1097)]),
+    'chair': (438, 562, [(17, 149), (160, 292), (303, 436), (438, 562), (572, 696), (706, 829), (839, 962), (972, 1097)]),
+    'desk':  (604, 728, [(17, 149), (160, 292), (303, 436), (438, 562), (572, 696), (706, 829), (839, 962), (972, 1097), (1103, 1228)]),
+}
+
+def key_swing_cell(a, rect, inset=4, tol=60):
+    """Remove the flat panel colour (edge-connected) and return a cropped RGBA frame + foot anchor."""
+    l, t, r, b = rect
+    cell = a[t + inset:b - inset, l + inset:r - inset].copy()
+    h, w, _ = cell.shape
+    bg = np.median(np.concatenate([cell[0], cell[-1], cell[:, 0], cell[:, -1]]), axis=0)
+    near = np.abs(cell - bg).sum(axis=2) < tol
+    seen = np.zeros((h, w), bool); q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if near[y, x]: seen[y, x] = True; q.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if near[y, x] and not seen[y, x]: seen[y, x] = True; q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and not seen[ny, nx] and near[ny, nx]:
+                seen[ny, nx] = True; q.append((ny, nx))
+    alpha = np.where(seen, 0, 255).astype(np.uint8)
+    img = Image.fromarray(np.dstack([cell.astype(np.uint8), alpha]), 'RGBA')
+    bb = img.getbbox()
+    if not bb: return img, (w // 2, h)
+    img = img.crop(bb)
+    # foot anchor: centre of the lowest opaque rows (the shoes), so frames line up on the ground
+    arr = np.asarray(img)[:, :, 3] > 0
+    low = np.nonzero(arr[-8:].any(axis=0))[0]
+    ax = int(np.median(low)) if len(low) else img.width // 2
+    return img, (ax, img.height)
+
+def cut_swing(data):
+    src = np.asarray(Image.open(os.path.join(SRC, SWING_SHEET)).convert('RGB')).astype(int)
+    out = {}
+    for key, (y0, y1, cols) in SWING_CELLS.items():
+        frames = [key_swing_cell(src, (x0, y0, x1, y1)) for x0, x1 in cols]
+        strip_w = sum(f.width for f, _ in frames) + 2 * len(frames)
+        strip_h = max(f.height for f, _ in frames)
+        strip = Image.new('RGBA', (strip_w, strip_h), (0, 0, 0, 0))
+        meta, x = [], 0
+        for f, (ax, ay) in frames:
+            strip.paste(f, (x, strip_h - f.height))
+            meta.append({'x': x, 'y': strip_h - f.height, 'w': f.width, 'h': f.height, 'ax': ax, 'ay': ay})
+            x += f.width + 2
+        save_small(strip, os.path.join(OUT, f'swing_{key}.png'))
+        out[key] = {'img': f'assets/sprites/swing_{key}.png', 'frames': meta}
+    data['swing'] = out
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     data = {'heroine': {}, 'monsters': {}, 'portraits': {}}
+    cut_swing(data)
     sheets = {}
     for name, sheet, cells, label in HEROINE:
         a = sheets.setdefault(sheet, load(sheet))
