@@ -34,17 +34,37 @@ const Input = (() => {
   addEventListener('blur', () => { for (const k in held) held[k] = false; });
 
   // ---- touch buttons (built in index.html as [data-btn]) ----
+  let runToggle = false;
   function bindTouch() {
     document.querySelectorAll('[data-btn]').forEach(el => {
       const b = el.dataset.btn;
-      const on = e => { e.preventDefault(); Audio2.unlock(); try { el.setPointerCapture(e.pointerId); } catch (_) {} down(b); el.classList.add('on'); };
-      const off = e => { e.preventDefault(); up(b); el.classList.remove('on'); };
-      el.addEventListener('pointerdown', on);
-      el.addEventListener('pointerup', off);
-      el.addEventListener('pointercancel', off);
-      el.addEventListener('lostpointercapture', off);
+      if (b === 'run') {
+        // ダッシュは押すたびに ON/OFF が切り替わる（長押し不要）
+        el.addEventListener('pointerdown', e => {
+          e.preventDefault(); Audio2.unlock();
+          runToggle = !runToggle; held.run = runToggle;
+          el.classList.toggle('on', runToggle);
+        });
+      } else {
+        const on = e => { e.preventDefault(); Audio2.unlock(); try { el.setPointerCapture(e.pointerId); } catch (_) {} down(b); el.classList.add('on'); };
+        const off = e => { e.preventDefault(); up(b); el.classList.remove('on'); };
+        el.addEventListener('pointerdown', on);
+        el.addEventListener('pointerup', off);
+        el.addEventListener('pointercancel', off);
+        el.addEventListener('lostpointercapture', off);
+      }
       el.addEventListener('contextmenu', e => e.preventDefault());
     });
+    // iOS Safari は viewport の user-scalable=no を無視するので、
+    // ダブルタップ拡大・ピンチ拡大をタッチイベント側で止める
+    const stop = e => { if (e.cancelable) e.preventDefault(); };
+    ['touchstart', 'touchend', 'touchmove'].forEach(t => {
+      document.querySelectorAll('#touch, canvas').forEach(el => el.addEventListener(t, stop, { passive: false }));
+    });
+    document.addEventListener('touchmove', e => { if (e.touches.length > 1) stop(e); }, { passive: false });
+    ['gesturestart', 'gesturechange', 'gestureend', 'dblclick'].forEach(t => document.addEventListener(t, stop, { passive: false }));
+    let lastEnd = 0;
+    document.addEventListener('touchend', e => { const now = Date.now(); if (now - lastEnd < 350) stop(e); lastEnd = now; }, { passive: false });
   }
 
   // ---- gamepad ----
