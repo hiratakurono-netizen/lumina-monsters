@@ -20,36 +20,15 @@ function drawMon(ctx, spr, x, y, scale, flip, sx = 1, sy = 1) {
 }
 
 // =====================================================================
-//  武器のドット絵（手に持つ部分）。1文字=1ドット、'.'は透明
+//  武器の絵（assets/weapons/*.png）。grip＝持ち手の位置（回転の中心＝手の位置）
+//  rot＝絵の向きから「前方が上（角度0）」に合わせるための回転オフセット（度）
+//  tip＝持ち手から先端へのベクトル（軌跡の計算用）
 // =====================================================================
-const WEAPON_PIX = {
-  bat: { S: 4, grip: [2, 14], pal: { w: '#c89b6a', d: '#5a3a22', h: '#3b2616', s: '#e8d09a' }, rows: [
-    '..dd..', '.dwwd.', '.dwsd.', 'dwwswd', 'dwwwsd', 'dwwwwd', '.dwwd.', '..dh..',
-    '..dh..', '..dh..', '..dh..', '..dh..', '..dh..', '..dh..', '..dh..', '..hh..' ] },
-  chair: { S: 4, grip: [2, 10], pal: { w: '#c89b6a', d: '#5a3a22', p: '#8a6fb0' }, rows: [
-    '..dddd..', '..dwwd..', '..dwwd..', '..dwwd..', 'dddddddd', 'dppppppd', 'dddddddd',
-    'd.d..d.d', 'd.d..d.d', 'd.d..d.d', 'd.d..d.d', 'd.d..d.d', 'd.d..d.d' ] },
-  desk: { S: 4, grip: [0, 19], pal: { W: '#f2efe9', d: '#6b4426' }, rows: [
-    'dddddddddd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd',
-    'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dddddddddd', 'd........d', 'd........d', 'd........d',
-    'd........d', 'd........d', 'd........d', 'd........d', 'd........d', 'd........d', 'd........d' ] },
+const WEAPON_ART = {
+  bat:   { file: 'assets/weapons/weapon_bat.png',   grip: [7, 56], rot: 0,   tip: [0, -56], S: 1.25 },
+  chair: { file: 'assets/weapons/weapon_chair.png', grip: [4, 50], rot: 0,   tip: [0, -48], S: 1.25 },
+  desk:  { file: 'assets/weapons/weapon_desk.png',  grip: [8, 52], rot: -90, tip: [58, -30], S: 1.25 },
 };
-const WEAPON_ART = {};
-function buildWeaponArt(key) {
-  const def = WEAPON_PIX[key], S = def.S, w = Math.max(...def.rows.map(r => r.length)), h = def.rows.length;
-  const c = document.createElement('canvas'); c.width = w * S; c.height = h * S;
-  const x = c.getContext('2d');
-  def.rows.forEach((row, y) => [...row].forEach((ch, xx) => {
-    if (ch === '.' || !def.pal[ch]) return;
-    x.fillStyle = def.pal[ch]; x.fillRect(xx * S, y * S, S, S);
-    // 木目・砂のざらつきを少しだけ入れる
-    if (ch === 'w' && (xx + y) % 3 === 0) { x.fillStyle = 'rgba(0,0,0,.14)'; x.fillRect(xx * S, y * S, S, S); }
-    if (ch === 's' && (xx * 7 + y * 3) % 4 === 0) { x.fillStyle = '#fff3d0'; x.fillRect(xx * S + 1, y * S + 1, 2, 2); }
-  }));
-  // 手が握る位置・先端までの長さ（ワールド単位ではなくスプライトの S 倍）
-  WEAPON_ART[key] = { c, S, g: def.grip, len: (def.grip[1] + 0.5) * S };
-}
-['bat', 'chair', 'desk'].forEach(buildWeaponArt);
 const HAND = { x: 22, y: -80 };  // 体の基準点から見た手の位置（ワールド、向き=+1）
 
 // =====================================================================
@@ -101,8 +80,10 @@ class Player {
     return arc[i] + (arc[n] - arc[i]) * k;
   }
   tipAt(angle, key) {
-    const len = WEAPON_ART[key].len, r = angle * Math.PI / 180;
-    return { x: this.x + this.face * (HAND.x + len * Math.sin(r)), y: this.y + HAND.y - len * Math.cos(r) };
+    const art = WEAPON_ART[key], r = (angle + art.rot) * Math.PI / 180;
+    const lx = art.tip[0] * Math.cos(r) - art.tip[1] * Math.sin(r);
+    const ly = art.tip[0] * Math.sin(r) + art.tip[1] * Math.cos(r);
+    return { x: this.x + this.face * (HAND.x + lx), y: this.y + HAND.y + ly };
   }
   // 属性武器の振り軌跡（砂・炎）を積む
   updateTrail(a, dt) {
@@ -286,12 +267,14 @@ class Player {
       ctx.beginPath(); pts.forEach((p, i) => { const jx = (Math.random() - 0.5) * jit; i ? ctx.lineTo(p.x + jx, p.y) : ctx.moveTo(p.x, p.y); }); ctx.stroke();
       ctx.restore();
     }
-    // 武器本体：手の位置を中心に角度で回す
-    const ang = this.weaponAngle(a) * Math.PI / 180;
+    // 武器本体：持ち手（grip）を手の位置に合わせ、その点を中心に回す
+    const ang = (this.weaponAngle(a) + art.rot) * Math.PI / 180;
+    const img = IMG[art.file];
     ctx.save();
     ctx.translate(Math.round(this.x - cam + this.face * HAND.x), Math.round(this.y + HAND.y));
     ctx.scale(this.face, 1); ctx.rotate(ang);
-    ctx.drawImage(art.c, -(art.g[0] + 0.5) * art.S, -(art.g[1] + 0.5) * art.S);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, -art.grip[0] * art.S, -art.grip[1] * art.S, img.width * art.S, img.height * art.S);
     ctx.restore();
   }
 }

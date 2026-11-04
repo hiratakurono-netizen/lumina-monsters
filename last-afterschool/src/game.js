@@ -451,6 +451,7 @@ function loadAll() {
   used.forEach(k => paths.add(SPRITE_DATA.monsters[k].img));
   Object.values(SPRITE_DATA.portraits).forEach(p => paths.add(p));
   paths.add(SPRITE_DATA.keyart);
+  Object.values(WEAPON_ART).forEach(w => paths.add(w.file));
   return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));
 }
 

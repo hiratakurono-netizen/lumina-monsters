@@ -13,7 +13,7 @@ MIME = {'.png': 'image/png', '.mp3': 'audio/mpeg'}
 assets = {}
 config = open(os.path.join(ROOT, 'src', 'config.js'), encoding='utf-8').read()
 used_mon = set(re.findall(r"spr: '(\w+)'", config)) | {'wyrmling'}
-for d in ('assets/sprites', 'assets/bgm'):
+for d in ('assets/sprites', 'assets/bgm', 'assets/weapons'):
     for f in sorted(os.listdir(os.path.join(ROOT, d))):
         ext = os.path.splitext(f)[1]
         if f.startswith('mon_') and f[4:-4] not in used_mon:
