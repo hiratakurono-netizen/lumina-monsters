@@ -28,42 +28,47 @@ const BGM = {
 //  武器：身近な物を相棒の力で「武器化」したもの
 //  box = [x0, y0, x1, y1]  足元基準・右向き時の攻撃判定
 // ---------------------------------------------------------------------
+// 武器の見た目は weapon（WEAPON_ART）で描画し、振りは arc（度・前方が+90）で決める。
+// 体はアイドルのポーズを使い、武器だけを手に持って振る。
 const WEAPONS = {
   kick: {
-    name: 'キック', icon: 'kick', anim: 'kick',
+    name: 'キック', icon: 'kick', anim: 'kick', size: 'K',
     frameMs: [70, 60, 110, 80, 70],
     hits: [{ frame: 2, dmg: 9, box: [5, -110, 105, -30], kb: 260, launch: 0, stop: 60 }],
     step: [0, 30, 60, 0, 0], cancelAt: 3,
   },
-  chair: {
-    name: '椅子の脚ダガー', from: '椅子', icon: 'chair', anim: 'swingS', size: 'S',
-    frameMs: [45, 50, 60, 60, 55, 70],
-    hits: [
-      { frame: 1, dmg: 9, box: [0, -105, 95, -10], kb: 120, stop: 40 },
-      { frame: 2, dmg: 9, box: [0, -95, 110, -10], kb: 120, stop: 40 },
-      { frame: 3, dmg: 12, box: [-10, -120, 115, -10], kb: 220, launch: 220, stop: 70 },
-    ],
-    step: [0, 40, 40, 60, 0, 0], cancelAt: 4,
-  },
   bat: {
-    name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swingM', size: 'M', element: 'sand',
-    frameMs: [70, 80, 70, 80, 80, 110],
+    name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'idle', size: 'S', weapon: 'bat', element: 'sand',
+    frameMs: [60, 60, 70, 80, 90],
+    arc: [-130, -60, 20, 80, 110],
     hits: [
-      { frame: 2, dmg: 16, box: [-30, -130, 135, -5], kb: 200, stop: 70 },
-      { frame: 3, dmg: 14, box: [0, -80, 150, 5], kb: 160, stop: 60 },
-      { frame: 4, dmg: 22, box: [-60, -135, 140, -5], kb: 360, launch: 320, stop: 90 },
+      { frame: 1, dmg: 11, box: [-10, -140, 110, -5], kb: 150, stop: 50 },
+      { frame: 2, dmg: 14, box: [-10, -140, 120, -5], kb: 200, stop: 60 },
+      { frame: 3, dmg: 16, box: [-20, -145, 130, -5], kb: 260, launch: 200, stop: 70 },
     ],
-    step: [0, 0, 70, 50, 70, 0], cancelAt: 5,
+    step: [0, 30, 50, 40, 0], cancelAt: 3,
+  },
+  chair: {
+    name: '椅子', from: '椅子', icon: 'chair', anim: 'idle', size: 'M', weapon: 'chair',
+    frameMs: [80, 80, 90, 100, 120],
+    arc: [-140, -70, 10, 70, 100],
+    hits: [
+      { frame: 1, dmg: 16, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
+      { frame: 2, dmg: 20, box: [-20, -140, 140, -5], kb: 300, launch: 180, stop: 80, shake: 6 },
+    ],
+    step: [0, 40, 60, 0, 0], cancelAt: 3,
   },
   desk: {
-    name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swingL', size: 'L',
-    frameMs: [180, 90, 70, 180, 150],
+    name: '机のグレートソード', from: '机', icon: 'desk', anim: 'idle', size: 'L', weapon: 'desk',
+    frameMs: [180, 100, 80, 180, 160],
+    arc: [-150, -80, 0, 70, 110],
     hits: [{ frame: 2, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
     step: [0, 30, 50, 0, 0], cancelAt: 3, next: 'desk2',
   },
   desk2: {
-    name: '回転斬り', anim: 'swingL2', hidden: true,
+    name: '回転斬り', anim: 'idle', size: 'L', weapon: 'desk', hidden: true,
     frameMs: [70, 80, 80, 80, 170],
+    arc: [0, 90, 180, 270, 360],
     hits: [
       { frame: 0, dmg: 18, box: [-40, -150, 175, 5], kb: 250, stop: 60, shake: 5 },
       { frame: 1, dmg: 18, box: [-140, -150, 150, 5], kb: 250, stop: 60, shake: 5 },

@@ -20,6 +20,39 @@ function drawMon(ctx, spr, x, y, scale, flip, sx = 1, sy = 1) {
 }
 
 // =====================================================================
+//  武器のドット絵（手に持つ部分）。1文字=1ドット、'.'は透明
+// =====================================================================
+const WEAPON_PIX = {
+  bat: { S: 4, grip: [2, 14], pal: { w: '#c89b6a', d: '#5a3a22', h: '#3b2616', s: '#e8d09a' }, rows: [
+    '..dd..', '.dwwd.', '.dwsd.', 'dwwswd', 'dwwwsd', 'dwwwwd', '.dwwd.', '..dh..',
+    '..dh..', '..dh..', '..dh..', '..dh..', '..dh..', '..dh..', '..dh..', '..hh..' ] },
+  chair: { S: 4, grip: [2, 10], pal: { w: '#c89b6a', d: '#5a3a22', p: '#8a6fb0' }, rows: [
+    '..dddd..', '..dwwd..', '..dwwd..', '..dwwd..', 'dddddddd', 'dppppppd', 'dddddddd',
+    'd.d..d.d', 'd.d..d.d', 'd.d..d.d', 'd.d..d.d', 'd.d..d.d', 'd.d..d.d' ] },
+  desk: { S: 4, grip: [0, 19], pal: { W: '#f2efe9', d: '#6b4426' }, rows: [
+    'dddddddddd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd',
+    'dWWWWWWWWd', 'dWWWWWWWWd', 'dWWWWWWWWd', 'dddddddddd', 'd........d', 'd........d', 'd........d',
+    'd........d', 'd........d', 'd........d', 'd........d', 'd........d', 'd........d', 'd........d' ] },
+};
+const WEAPON_ART = {};
+function buildWeaponArt(key) {
+  const def = WEAPON_PIX[key], S = def.S, w = Math.max(...def.rows.map(r => r.length)), h = def.rows.length;
+  const c = document.createElement('canvas'); c.width = w * S; c.height = h * S;
+  const x = c.getContext('2d');
+  def.rows.forEach((row, y) => [...row].forEach((ch, xx) => {
+    if (ch === '.' || !def.pal[ch]) return;
+    x.fillStyle = def.pal[ch]; x.fillRect(xx * S, y * S, S, S);
+    // 木目・砂のざらつきを少しだけ入れる
+    if (ch === 'w' && (xx + y) % 3 === 0) { x.fillStyle = 'rgba(0,0,0,.14)'; x.fillRect(xx * S, y * S, S, S); }
+    if (ch === 's' && (xx * 7 + y * 3) % 4 === 0) { x.fillStyle = '#fff3d0'; x.fillRect(xx * S + 1, y * S + 1, 2, 2); }
+  }));
+  // 手が握る位置・先端までの長さ（ワールド単位ではなくスプライトの S 倍）
+  WEAPON_ART[key] = { c, S, g: def.grip, len: (def.grip[1] + 0.5) * S };
+}
+['bat', 'chair', 'desk'].forEach(buildWeaponArt);
+const HAND = { x: 22, y: -80 };  // 体の基準点から見た手の位置（ワールド、向き=+1）
+
+// =====================================================================
 //  Player
 // =====================================================================
 class Player {
@@ -33,6 +66,7 @@ class Player {
     this.weapons = lo.weapons.slice(); this.wIdx = 0; this.fire = lo.fire; this.canFight = lo.canFight;
     this.inv = 0; this.atk = null; this.hurtT = 0; this.locked = false; this.faceTimer = 0; this.faceOverride = null;
     this.minHp = 0;
+    this.guarding = false; this.dodgeT = 0; this.dodgeCD = 0; this.ghosts = [];
   }
   get weapon() { return this.weapons.length ? this.weapons[this.wIdx] : null; }
   get element() { if (this.fire) return 'fire'; const w = this.atk ? WEAPONS[this.atk.key] : (this.weapon && WEAPONS[this.weapon]); return (w && w.element) || 'none'; }
@@ -46,11 +80,11 @@ class Player {
 
   startAttack(key, opts = {}) {
     const def = WEAPONS[key];
-    this.atk = { key, def, frame: 0, ft: 0, queued: false, special: !!opts.special, chainNext: opts.chainNext || null };
+    this.atk = { key, def, frame: 0, ft: 0, queued: false, special: !!opts.special, chainNext: opts.chainNext || null, trail: [] };
     this.state = 'attack'; this.anim = def.anim; this.frame = 0;
-    const s = def.anim === 'swingL' || def.anim === 'swingL2' ? 'swingL' : def.anim === 'swingM' ? 'swingM' : def.anim === 'kick' ? 'kick' : 'swingS';
+    const s = key === 'kick' ? 'kick' : def.size === 'L' ? 'swingL' : def.size === 'M' ? 'swingM' : 'swingS';
     Audio2.sfx(s);
-    if (this.fire && key !== 'kick') Audio2.sfx('fire');
+    if (this.element === 'fire' && key !== 'kick') Audio2.sfx('fire');
     this.enterFrame();
   }
   enterFrame() {
@@ -59,11 +93,43 @@ class Player {
     this.vx = st * this.face * 6;
     for (const h of def.hits) if (h.frame === a.frame) this.w.playerHit(this, h, a);
   }
+  // 武器の角度（度）。前方が+90、真上が0
+  weaponAngle(a) {
+    const arc = a.def.arc; if (!arc) return 0;
+    const i = Math.min(a.frame, arc.length - 1), n = Math.min(i + 1, arc.length - 1);
+    const k = i >= arc.length - 1 ? 0 : clamp(a.ft / a.def.frameMs[a.frame], 0, 1);
+    return arc[i] + (arc[n] - arc[i]) * k;
+  }
+  tipAt(angle, key) {
+    const len = WEAPON_ART[key].len, r = angle * Math.PI / 180;
+    return { x: this.x + this.face * (HAND.x + len * Math.sin(r)), y: this.y + HAND.y - len * Math.cos(r) };
+  }
+  // 属性武器の振り軌跡（砂・炎）を積む
+  updateTrail(a, dt) {
+    const key = a.def.weapon; if (!key) return;
+    const el = this.element;
+    a.trail.forEach(p => p.t += dt);
+    a.trail = a.trail.filter(p => p.t < 0.3);
+    if (el === 'none') return;
+    const tip = this.tipAt(this.weaponAngle(a), key);
+    a.trail.push({ x: tip.x, y: tip.y, t: 0 });
+    if (el === 'sand' && Math.random() < 0.7) this.w.dust(tip.x, tip.y, 1, '#d9c08c');
+    if (el === 'fire' && Math.random() < 0.8) this.w.spark(tip.x, tip.y, '#ff9a3a', 1, -40);
+  }
 
   update(dt) {
     const W = this.w, I = Input;
-    this.inv -= dt; this.hurtT -= dt; this.faceTimer -= dt;
+    this.inv -= dt; this.hurtT -= dt; this.faceTimer -= dt; this.dodgeCD -= dt;
+    this.ghosts.forEach(g => g.t += dt); this.ghosts = this.ghosts.filter(g => g.t < 0.3);
     const control = !this.locked && !W.dialogue && W.state === 'play';
+    const guardHeld = control && !!I.held.guard;
+
+    if (this.state === 'dodge') { // 緊急回避：無敵つき
+      this.dodgeT -= dt; this.inv = Math.max(this.inv, 0.05);
+      if (Math.random() < 0.6) this.ghosts.push({ x: this.x, y: this.y, frame: this.frame, anim: this.anim, face: this.face, t: 0 });
+      if (this.dodgeT <= 0) { this.state = 'idle'; this.vx = 0; }
+      return this.physics(dt);
+    }
 
     if (this.state === 'attack') {
       const a = this.atk, def = a.def;
@@ -83,7 +149,8 @@ class Player {
           this.frame = a.frame; this.enterFrame();
         }
       }
-      this.frame = this.atk ? this.atk.frame : 0;
+      if (this.atk) { this.frame = def.weapon ? 0 : this.atk.frame; this.updateTrail(this.atk, dt); }
+      else this.frame = 0;
       return this.physics(dt);
     }
     if (this.state === 'hurt') {
@@ -101,19 +168,28 @@ class Player {
         W.floatText(this.x, this.y - 140, WEAPONS[this.weapon].name, '#e9dcff', 14);
       }
       if (this.canFight) {
-        if (I.hit('special')) {
+        if (I.hit('special') && !guardHeld) {
           if (W.partnerOn && this.mp >= SPECIAL.mp) { this.mp -= SPECIAL.mp; W.doSpecial(this); return this.physics(dt); }
           else if (W.partnerOn) W.floatText(this.x, this.y - 140, 'MPが足りない', '#9bb6ff', 13);
         }
-        if (I.hit('attack')) { this.startAttack(this.weapon || 'kick'); return this.physics(dt); }
-        if (I.hit('kick')) { this.startAttack('kick'); return this.physics(dt); }
+        if (I.hit('attack') && !guardHeld) { this.startAttack(this.weapon || 'kick'); return this.physics(dt); }
+        if (I.hit('kick') && !guardHeld) { this.startAttack('kick'); return this.physics(dt); }
       }
     }
-    const run = control && I.dash && move !== 0;
-    const speed = run ? 340 : 190;
+    this.guarding = guardHeld && this.onGround;
+    // ガード中の横入力＝緊急回避（スマブラ風）
+    if (this.guarding && move !== 0 && this.dodgeCD <= 0) {
+      this.state = 'dodge'; this.dodgeT = 0.28; this.dodgeCD = 0.7; this.inv = 0.32;
+      this.face = move; this.vx = move * 560; this.guarding = false;
+      Audio2.sfx('jump'); W.dust(this.x, GROUND_Y, 5);
+      return this.physics(dt);
+    }
+    const run = control && I.dash && move !== 0 && !this.guarding;
+    const speed = this.guarding ? 110 : run ? 340 : 190;
     this.vx = move * speed;
     if (move) this.face = move;
-    if (!this.onGround) { this.anim = 'run'; this.frame = this.vy < 0 ? 1 : 4; }
+    if (this.guarding) { this.anim = 'idle'; this.frame = 0; this.ft = 0; }
+    else if (!this.onGround) { this.anim = 'run'; this.frame = this.vy < 0 ? 1 : 4; }
     else if (move) {
       const nextAnim = run ? 'run' : 'walk';
       if (this.anim !== nextAnim) { this.anim = nextAnim; this.frame = 0; this.ft = 0; }
@@ -136,8 +212,18 @@ class Player {
   }
   hurt(dmg, fromX) {
     if (this.inv > 0 || this.w.state !== 'play') return false;
+    // ガード：正面からの攻撃はダメージ30%・ノックバックなし
+    if (this.guarding && (fromX - this.x) * this.face > 0) {
+      const d = Math.max(1, Math.round(dmg * 0.3));
+      this.hp = Math.max(this.minHp, this.hp - d); this.inv = 0.25;
+      Audio2.sfx('blip'); this.w.shake = Math.max(this.w.shake, 3); this.w.hitstop = Math.max(this.w.hitstop, 0.03);
+      this.w.spark(this.x + this.face * 40, this.y - 70, '#bfe9ff', 8);
+      this.w.floatText(this.x, this.y - 120, 'GUARD -' + d, '#bfe9ff', 16);
+      if (this.hp <= 0) this.w.onPlayerDown();
+      return true;
+    }
     this.hp = Math.max(this.minHp, this.hp - dmg);
-    this.inv = 1.0; this.hurtT = 0.8; this.state = 'hurt'; this.atk = null;
+    this.inv = 1.0; this.hurtT = 0.8; this.state = 'hurt'; this.atk = null; this.guarding = false;
     this.vx = (this.x < fromX ? -1 : 1) * 320; this.vy = -280; this.onGround = false;
     Audio2.sfx('hurt'); this.w.shake = Math.max(this.w.shake, 6); this.w.hitstop = 0.06;
     this.w.floatText(this.x, this.y - 120, '-' + dmg, '#ff7a8a', 18);
@@ -156,10 +242,15 @@ class Player {
     }
   }
   draw(ctx, cam) {
-    const blink = this.inv > 0 && this.state !== 'attack' && Math.floor(this.inv * 20) % 2 === 0;
+    const blink = this.inv > 0 && this.state !== 'attack' && this.state !== 'dodge' && Math.floor(this.inv * 20) % 2 === 0;
     // 影
     ctx.fillStyle = 'rgba(10,0,20,.35)'; ctx.beginPath();
     ctx.ellipse(this.x - cam, GROUND_Y + 2, 34 * (1 - (GROUND_Y - this.y) / 600), 7, 0, 0, 7); ctx.fill();
+    // 回避の残像
+    for (const g of this.ghosts) {
+      ctx.globalAlpha = 0.4 * (1 - g.t / 0.3);
+      drawHero(ctx, g.anim, g.frame, g.x - cam, g.y, g.face);
+    }
     if (blink) ctx.globalAlpha = 0.35;
     if (this.atk && this.atk.special) { // 必殺中のオーラ
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.25 + Math.random() * 0.15;
@@ -170,6 +261,38 @@ class Player {
     }
     drawHero(ctx, this.anim, this.frame, this.x - cam, this.y, this.face);
     ctx.globalAlpha = 1;
+    if (this.guarding) this.drawGuard(ctx, cam);
+    if (this.atk) this.drawWeapon(ctx, cam);
+  }
+  drawGuard(ctx, cam) {
+    const x = this.x - cam + this.face * 30, y = this.y - 70;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(160,220,255,.85)'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(x, y, 42, this.face > 0 ? -1.2 : Math.PI - 1.2, this.face > 0 ? 1.2 : Math.PI + 1.2); ctx.stroke();
+    ctx.fillStyle = 'rgba(120,200,255,.18)'; ctx.fill(); ctx.restore();
+  }
+  drawWeapon(ctx, cam) {
+    const a = this.atk, key = a.def.weapon; if (!key) return;
+    const art = WEAPON_ART[key], el = this.element, E = ELEMENTS[el];
+    // 属性の軌跡（砂＝砂煙、炎＝揺らぐ火の線）
+    if (a.trail.length > 1 && el !== 'none') {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const pts = a.trail.map(p => ({ x: p.x - cam, y: p.y, t: p.t }));
+      const jit = el === 'fire' ? 4 : 1;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = E.glow; ctx.lineWidth = el === 'fire' ? 16 : 12; ctx.globalAlpha = 0.35;
+      ctx.beginPath(); pts.forEach((p, i) => { const jx = (Math.random() - 0.5) * jit; i ? ctx.lineTo(p.x + jx, p.y) : ctx.moveTo(p.x, p.y); }); ctx.stroke();
+      ctx.strokeStyle = E.color; ctx.lineWidth = el === 'fire' ? 6 : 4; ctx.globalAlpha = 0.8;
+      ctx.beginPath(); pts.forEach((p, i) => { const jx = (Math.random() - 0.5) * jit; i ? ctx.lineTo(p.x + jx, p.y) : ctx.moveTo(p.x, p.y); }); ctx.stroke();
+      ctx.restore();
+    }
+    // 武器本体：手の位置を中心に角度で回す
+    const ang = this.weaponAngle(a) * Math.PI / 180;
+    ctx.save();
+    ctx.translate(Math.round(this.x - cam + this.face * HAND.x), Math.round(this.y + HAND.y));
+    ctx.scale(this.face, 1); ctx.rotate(ang);
+    ctx.drawImage(art.c, -(art.g[0] + 0.5) * art.S, -(art.g[1] + 0.5) * art.S);
+    ctx.restore();
   }
 }
 

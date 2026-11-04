@@ -5,7 +5,7 @@ const Input = (() => {
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', KeyE: 'down',
     KeyZ: 'attack', KeyJ: 'attack', KeyX: 'kick', KeyK: 'kick',
-    KeyC: 'jump', Space: 'jump', KeyV: 'special', KeyL: 'special',
+    KeyC: 'jump', Space: 'jump', KeyG: 'guard', KeyF: 'guard', KeyV: 'special', KeyL: 'special',
     KeyQ: 'swap', ShiftLeft: 'run', ShiftRight: 'run',
     Enter: 'ok', Escape: 'pause', KeyP: 'pause', KeyM: 'mute',
   };
@@ -84,6 +84,7 @@ const Input = (() => {
       special: p.buttons[3] && p.buttons[3].pressed,
       swap: p.buttons[5] && p.buttons[5].pressed,
       run: p.buttons[7] && p.buttons[7].pressed,
+      guard: p.buttons[4] && p.buttons[4].pressed,
       pause: p.buttons[9] && p.buttons[9].pressed,
       ok: p.buttons[0] && p.buttons[0].pressed,
     };
