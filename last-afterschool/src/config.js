@@ -18,10 +18,10 @@ const NAMES = {
 
 // BGM（リポジトリ直下の既存楽曲を仮で流用）
 const BGM = {
-  morning: '../03_base_morning_camp.mp3',
-  battle: '../01_battle_luminous_rush.mp3',
-  boss: '../02_boss_crimson_assault.mp3',
-  sorrow: '../04_final_abyss_gate.mp3',
+  morning: 'assets/bgm/03_base_morning_camp.mp3',
+  battle: 'assets/bgm/01_battle_luminous_rush.mp3',
+  boss: 'assets/bgm/02_boss_crimson_assault.mp3',
+  sorrow: 'assets/bgm/04_final_abyss_gate.mp3',
 };
 
 // ---------------------------------------------------------------------

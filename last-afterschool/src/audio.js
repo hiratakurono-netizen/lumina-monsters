@@ -1,7 +1,7 @@
 // BGM（HTMLAudio）と効果音（WebAudio で合成）
 const Audio2 = (() => {
   let ctx = null, master = null, muted = false;
-  let bgmEl = null, bgmKey = null;
+  let bgmKey = null;
   const BGM_VOL = 0.4;
 
   function init() {
@@ -13,30 +13,40 @@ const Audio2 = (() => {
   }
   function resume() { init(); if (ctx && ctx.state === 'suspended') ctx.resume(); }
 
-  function playBgm(key) {
-    if (bgmKey === key) return;
-    bgmKey = key;
-    const old = bgmEl;
-    if (old) fade(old, old.volume, 0, 600, () => old.pause());
-    if (!key || !BGM[key]) { bgmEl = null; return; }
-    const el = new Audio(BGM[key]);
-    el.loop = true; el.volume = 0;
-    el.play().catch(() => {});
-    fade(el, 0, muted ? 0 : BGM_VOL, 900);
-    bgmEl = el;
-  }
-  function fade(el, from, to, ms, done) {
-    const t0 = performance.now();
+  // iOS対策：BGM用の <audio> は1つだけ作り、最初のタップ中に再生を許可させてから src を差し替えて使い回す
+  const el = new Audio(); el.loop = true; el.preload = 'auto';
+  let pending = false, fadeId = 0;
+  function fadeTo(to, ms, done) {
+    const id = ++fadeId, from = el.volume, t0 = performance.now();
     const step = () => {
+      if (id !== fadeId) return;
       const k = Math.min(1, (performance.now() - t0) / ms);
       try { el.volume = from + (to - from) * k; } catch (e) {}
       if (k < 1) requestAnimationFrame(step); else if (done) done();
     };
     step();
   }
+  function playBgm(key) {
+    if (bgmKey === key) return;
+    bgmKey = key;
+    const src = BGM[key];
+    fadeTo(0, el.paused ? 0 : 350, () => {
+      if (bgmKey !== key) return;
+      if (!src) { el.pause(); return; }
+      el.src = src; el.currentTime = 0;
+      const p = el.play();
+      if (p && p.catch) p.then(() => { pending = false; }).catch(() => { pending = true; });
+      fadeTo(muted ? 0 : BGM_VOL, 700);
+    });
+  }
+  // ユーザー操作（タップ/キー）のハンドラ内から同期的に呼ぶ
+  function unlock() {
+    resume();
+    if (pending && el.src) { el.play().then(() => { pending = false; fadeTo(muted ? 0 : BGM_VOL, 500); }).catch(() => {}); }
+  }
   function toggleMute() {
     muted = !muted;
-    if (bgmEl) bgmEl.volume = muted ? 0 : BGM_VOL;
+    el.muted = muted;
     if (master) master.gain.value = muted ? 0 : 0.5;
     return muted;
   }
@@ -88,5 +98,5 @@ const Audio2 = (() => {
   };
   function sfx(name) { if (!ctx || muted) return; try { SFX[name] && SFX[name](); } catch (e) {} }
 
-  return { init, resume, playBgm, sfx, toggleMute, get muted() { return muted; } };
+  return { init, resume, unlock, playBgm, sfx, toggleMute, get muted() { return muted; } };
 })();

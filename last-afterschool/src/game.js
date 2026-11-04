@@ -3,6 +3,7 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const FONT = 'DotGothic16, "Hiragino Sans", monospace';
+const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || (window.matchMedia && matchMedia('(pointer: coarse)').matches);
 
 // =====================================================================
 //  Save
@@ -122,16 +123,18 @@ function drawHud(ctx, W) {
   ctx.fillText(P.weapon ? WEAPONS[P.weapon].name : (P.canFight ? '素手（キック）' : ''), 304, 84);
   // 下部
   ctx.font = `18px ${FONT}`; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4;
-  const lv = `Lv ${P.lv}`; ctx.strokeText(lv, 20, VIEW_H - 16); ctx.fillText(lv, 20, VIEW_H - 16);
-  const need = 20 + P.lv * 15; bar(ctx, 80, VIEW_H - 26, 80, 5, P.exp / need, '#ffe27a');
+  // スマホでは下端がボタンに隠れるので Lv/TIME を上に置く
+  const lvY = IS_TOUCH ? 128 : VIEW_H - 16, timeY = IS_TOUCH ? 56 : VIEW_H - 16;
+  const lv = `Lv ${P.lv}`; ctx.strokeText(lv, 20, lvY); ctx.fillText(lv, 20, lvY);
+  const need = 20 + P.lv * 15; bar(ctx, 80, lvY - 10, 80, 5, P.exp / need, '#ffe27a');
   const t = W.time, tt = `TIME ${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-  ctx.textAlign = 'right'; ctx.strokeText(tt, VIEW_W - 20, VIEW_H - 16); ctx.fillText(tt, VIEW_W - 20, VIEW_H - 16);
+  ctx.textAlign = 'right'; ctx.strokeText(tt, VIEW_W - 20, timeY); ctx.fillText(tt, VIEW_W - 20, timeY);
   ctx.font = `14px ${FONT}`; ctx.fillStyle = '#d8ccff';
   const st = `${W.ch.title}  ${W.ch.sub}`; ctx.strokeText(st, VIEW_W - 20, 30); ctx.fillText(st, VIEW_W - 20, 30);
   // コンボ
   if (W.combo >= 2) {
     const s = 1 + Math.max(0, W.comboT - 1.9) * 2;
-    ctx.save(); ctx.translate(VIEW_W - 30, 110); ctx.scale(s, s);
+    ctx.save(); ctx.translate(VIEW_W - 30, IS_TOUCH ? 130 : 110); ctx.scale(s, s);
     ctx.font = `34px ${FONT}`; ctx.fillStyle = W.combo >= 25 ? '#ff8ad0' : W.combo >= 10 ? '#ffe27a' : '#fff';
     ctx.strokeText(W.combo, -60, 0); ctx.fillText(W.combo, -60, 0);
     ctx.font = `14px ${FONT}`; ctx.fillStyle = '#e0d0ff'; ctx.strokeText('HITS', 0, 0); ctx.fillText('HITS', 0, 0);
@@ -145,7 +148,7 @@ function drawHud(ctx, W) {
   // ボス
   const B = W.boss;
   if (B) {
-    const bw = 560, x = (VIEW_W - bw) / 2, y = VIEW_H - 46;
+    const bw = IS_TOUCH ? 440 : 560, x = (VIEW_W - bw) / 2, y = IS_TOUCH ? 150 : VIEW_H - 46;
     ctx.font = `15px ${FONT}`; ctx.fillStyle = '#ffd0d8'; ctx.strokeText(B.d.name, x, y - 8); ctx.fillText(B.d.name, x, y - 8);
     bar(ctx, x, y, bw, 12, Math.max(0, B.hp / B.maxHp), B.rage ? '#ff4a6a' : '#d070ff');
     if (W.bossIntro > 0) {
@@ -196,6 +199,7 @@ const Game = {
     }
     this.fade = Math.max(0, this.fade - dt * 1.6);
     const S = this['u_' + this.scene]; if (S) S.call(this, dt);
+    this.tapAt = null;
     Input.endFrame();
   },
   draw() {
@@ -207,13 +211,16 @@ const Game = {
   },
 
   // ---------- boot ----------
-  u_boot() { if (Input.confirm() || Input.hit('pause')) { Audio2.resume(); this.scene = 'title'; this.menu = 0; this.fade = 1; Audio2.playBgm('sorrow'); } },
+  u_boot() { if (Input.confirm() || Input.hit('pause')) this.leaveBoot(); },
+  leaveBoot() { if (this.scene !== 'boot') return; Audio2.unlock(); this.scene = 'title'; this.menu = 0; this.fade = 1; Audio2.playBgm('sorrow'); },
+  // キャンバス上のタップ位置（ゲーム座標）。各シーンで消費する
+  takeTap() { const t = this.tapAt; this.tapAt = null; return t; },
   d_boot() {
     ctx.fillStyle = '#e9dcff'; ctx.font = `22px ${FONT}`; ctx.textAlign = 'center';
     ctx.globalAlpha = 0.5 + Math.sin(this.t * 3) * 0.5;
-    ctx.fillText('PRESS ENTER / TAP', VIEW_W / 2, VIEW_H / 2);
+    ctx.fillText(IS_TOUCH ? 'TAP TO START' : 'PRESS ENTER / TAP', VIEW_W / 2, VIEW_H / 2);
     ctx.globalAlpha = 1; ctx.font = `13px ${FONT}`; ctx.fillStyle = '#887aa8';
-    ctx.fillText('音が出ます（M でミュート）', VIEW_W / 2, VIEW_H / 2 + 40); ctx.textAlign = 'left';
+    ctx.fillText(IS_TOUCH ? '音が出ます　スマホは横向き推奨' : '音が出ます（M でミュート）', VIEW_W / 2, VIEW_H / 2 + 40); ctx.textAlign = 'left';
   },
 
   // ---------- title ----------
@@ -224,16 +231,29 @@ const Game = {
     return it;
   },
   u_title(dt) {
-    if (this.sub === 'help') { if (Input.confirm() || Input.hit('pause') || Input.hit('kick')) { this.sub = null; Audio2.sfx('select'); } return; }
+    const tap = this.takeTap();
+    if (this.sub === 'help') { if (tap || Input.confirm() || Input.hit('pause') || Input.hit('kick')) { this.sub = null; Audio2.sfx('select'); } return; }
     if (this.sub === 'select') {
       const n = this.save.unlocked + 1;
       if (Input.hit('up') || Input.hit('left')) { this.selIdx = (this.selIdx + n - 1) % n; Audio2.sfx('blip'); }
       if (Input.hit('down') || Input.hit('right')) { this.selIdx = (this.selIdx + 1) % n; Audio2.sfx('blip'); }
       if (Input.hit('pause') || Input.hit('kick')) { this.sub = null; return; }
+      if (tap) {
+        if (tap.x < 180 || tap.x > 780 || tap.y < 60 || tap.y > 480) { this.sub = null; return; }
+        const i = Math.floor((tap.y - 122) / 42);
+        if (i < 0 || i >= n) return;
+        if (i !== this.selIdx) { this.selIdx = i; Audio2.sfx('blip'); return; }
+        Audio2.sfx('select'); this.sub = null; this.transition(() => this.startChapter(i)); return;
+      }
       if (Input.confirm()) { Audio2.sfx('select'); const i = this.selIdx; this.sub = null; this.transition(() => this.startChapter(i)); }
       return;
     }
     const items = this.titleItems();
+    if (tap) {
+      const i = items.findIndex((_, k) => tap.y > 320 + k * 40 - 30 && tap.y < 320 + k * 40 + 10 && tap.x > 50 && tap.x < 420);
+      if (i < 0) return;
+      this.menu = i; Input.tap();
+    }
     if (Input.hit('up') || Input.hit('left')) { this.menu = (this.menu + items.length - 1) % items.length; Audio2.sfx('blip'); }
     if (Input.hit('down') || Input.hit('right') || Input.hit('swap')) { this.menu = (this.menu + 1) % items.length; Audio2.sfx('blip'); }
     if (Input.confirm()) {
@@ -274,7 +294,7 @@ const Game = {
       ctx.fillText((on ? '▶ ' : '　') + it.t, 70, y);
     });
     ctx.font = `12px ${FONT}`; ctx.fillStyle = '#8c80b0';
-    ctx.fillText('↑↓ 選択　Z / Enter 決定　M ミュート', 70, VIEW_H - 30);
+    ctx.fillText(IS_TOUCH ? 'タップで選択' : '↑↓ 選択　Z / Enter 決定　M ミュート', 70, VIEW_H - 30);
     if (this.sub === 'help') this.drawHelp();
     if (this.sub === 'select') this.drawSelect();
   },
@@ -311,7 +331,7 @@ const Game = {
   // ---------- chapter card ----------
   u_card(dt) {
     this.card.t += dt;
-    if (this.card.t > 2.4 || (this.card.t > 0.6 && Input.confirm())) { this.scene = 'play'; this.world.begin(); }
+    if (this.card.t > 2.4 || (this.card.t > 0.6 && (Input.confirm() || this.takeTap()))) { this.scene = 'play'; this.world.begin(); }
   },
   d_card() {
     const W = this.world; W.draw(ctx);
@@ -327,10 +347,18 @@ const Game = {
   // ---------- play ----------
   u_play(dt) {
     const W = this.world;
+    const tap = this.takeTap();
+    if (tap && W.dialogue && !this.paused) Input.tap();
     if (this.paused) {
-      if (Input.hit('up') || Input.hit('down') || Input.hit('left') || Input.hit('right')) { this.pauseIdx ^= 1; Audio2.sfx('blip'); }
+      if (tap) { const i = Math.floor((tap.y - 240) / 40); if (i >= 0 && i < 3) { this.pauseIdx = i; Input.tap(); } }
+      if (Input.hit('up') || Input.hit('left')) { this.pauseIdx = (this.pauseIdx + 2) % 3; Audio2.sfx('blip'); }
+      if (Input.hit('down') || Input.hit('right')) { this.pauseIdx = (this.pauseIdx + 1) % 3; Audio2.sfx('blip'); }
       if (Input.hit('pause')) this.paused = false;
-      if (Input.confirm()) { if (this.pauseIdx === 0) this.paused = false; else { this.paused = false; this.transition(() => { this.scene = 'title'; this.menu = 0; Audio2.playBgm('sorrow'); }); } }
+      else if (Input.confirm()) {
+        if (this.pauseIdx === 0) this.paused = false;
+        else if (this.pauseIdx === 1) { Audio2.toggleMute(); Audio2.sfx('select'); }
+        else { this.paused = false; this.transition(() => { this.scene = 'title'; this.menu = 0; Audio2.playBgm('sorrow'); }); }
+      }
       return;
     }
     if (Input.hit('pause') && !W.dialogue && W.state === 'play') { this.paused = true; this.pauseIdx = 0; Input.endFrame(); return; }
@@ -344,7 +372,7 @@ const Game = {
     if (this.paused) {
       ctx.fillStyle = 'rgba(8,4,16,.7)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       ctx.textAlign = 'center'; ctx.font = `32px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText('PAUSE', VIEW_W / 2, 210);
-      ['つづける', 'タイトルへ'].forEach((t, i) => { ctx.font = `20px ${FONT}`; ctx.fillStyle = i === this.pauseIdx ? '#ffe9a8' : '#bfb3e0'; ctx.fillText((i === this.pauseIdx ? '▶ ' : '') + t, VIEW_W / 2, 270 + i * 40); });
+      ['つづける', Audio2.muted ? 'サウンド：OFF' : 'サウンド：ON', 'タイトルへ'].forEach((t, i) => { ctx.font = `20px ${FONT}`; ctx.fillStyle = i === this.pauseIdx ? '#ffe9a8' : '#bfb3e0'; ctx.fillText((i === this.pauseIdx ? '▶ ' : '') + t, VIEW_W / 2, 270 + i * 40); });
       ctx.textAlign = 'left';
     }
   },
@@ -367,7 +395,9 @@ const Game = {
 
   // ---------- game over ----------
   u_gameover() {
+    const tap = this.takeTap();
     if (this.t < 1) return;
+    if (tap) { const i = tap.y > 350 && tap.y < 400 ? 0 : tap.y >= 400 && tap.y < 440 ? 1 : -1; if (i >= 0) { this.menu = i; Input.tap(); } }
     if (Input.hit('up') || Input.hit('down') || Input.hit('left') || Input.hit('right')) { this.menu ^= 1; Audio2.sfx('blip'); }
     if (Input.confirm()) { const i = this.world.chIdx; if (this.menu === 0) this.transition(() => this.startChapter(i)); else this.transition(() => { this.scene = 'title'; Audio2.playBgm('sorrow'); }); }
   },
@@ -381,7 +411,7 @@ const Game = {
   },
 
   // ---------- end card ----------
-  u_end() { if (this.t > 3 && Input.confirm()) this.transition(() => { this.scene = 'title'; this.menu = 0; }); },
+  u_end() { if (this.t > 3 && (Input.confirm() || this.takeTap())) this.transition(() => { this.scene = 'title'; this.menu = 0; }); },
   d_end() {
     const bg = Backgrounds.get('rooftop_calm'); Backgrounds.draw(ctx, bg, 0);
     ctx.fillStyle = `rgba(8,4,16,${Math.min(0.82, this.t * 0.3)})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -422,13 +452,23 @@ function loadAll() {
 }
 
 function fit() {
-  const s = Math.min(innerWidth / VIEW_W, innerHeight / VIEW_H);
+  const wrap = document.getElementById('wrap'), cs = getComputedStyle(wrap);
+  const w = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const h = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const s = Math.max(0.1, Math.min(w / VIEW_W, h / VIEW_H));
   canvas.style.width = Math.floor(VIEW_W * s) + 'px'; canvas.style.height = Math.floor(VIEW_H * s) + 'px';
 }
-addEventListener('resize', fit); fit();
-canvas.addEventListener('pointerdown', () => { Audio2.resume(); if (Game.scene === 'boot' || (Game.world && Game.world.dialogue) || Game.scene === 'end' || Game.scene === 'card') Input.tap(); });
+addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 200)); fit();
+canvas.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  Audio2.unlock();
+  if (Game.scene === 'boot') { Game.leaveBoot(); return; }
+  const r = canvas.getBoundingClientRect();
+  Game.tapAt = { x: (e.clientX - r.left) / r.width * VIEW_W, y: (e.clientY - r.top) / r.height * VIEW_H };
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
 Input.bindTouch();
-if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+if (IS_TOUCH) document.body.classList.add('touch');
 
 let last = performance.now();
 function loop(now) {

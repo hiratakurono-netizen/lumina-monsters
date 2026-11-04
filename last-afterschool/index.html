@@ -3,48 +3,69 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>さいごの放課後（仮題）プロトタイプ</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>さいごの放課後</title>
+</head>
+<body>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 <style>
-  html, body { margin: 0; height: 100%; background: #07040e; overflow: hidden; touch-action: none;
-    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  body { display: flex; align-items: center; justify-content: center; font-family: 'DotGothic16', monospace; }
-  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; background: #0b0714; }
+  /* 単一の暗い世界観で統一（ゲーム画面のためテーマ切替なし） */
+  :root {
+    --bg: #07040e; --stage: #0b0714; --ink: #f0e8ff; --btn: rgba(40, 28, 80, .38);
+    --btn-on: rgba(160, 130, 255, .6); --edge: rgba(220, 200, 255, .55); --gold: rgba(255, 226, 122, .8);
+    --b: min(17vh, 78px);
+    color-scheme: dark;
+  }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); overflow: hidden; touch-action: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'DotGothic16', 'Hiragino Sans', monospace; }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; background: var(--stage); touch-action: none; }
   #touch { display: none; position: fixed; inset: 0; pointer-events: none; }
   body.touch #touch { display: block; }
-  .btn { position: absolute; pointer-events: auto; border-radius: 50%; border: 2px solid rgba(220,200,255,.55);
-    background: rgba(40,28,80,.35); color: #f0e8ff; font-size: 14px; display: flex; align-items: center; justify-content: center;
-    width: 64px; height: 64px; touch-action: none; }
-  .btn.on { background: rgba(160,130,255,.55); }
-  .pad { left: 18px; bottom: 22px; }
-  .pad .btn { position: absolute; }
-  [data-btn="left"]  { left: 16px;  bottom: 30px; }
-  [data-btn="right"] { left: 96px;  bottom: 30px; }
-  [data-btn="down"]  { left: 56px;  bottom: 104px; width: 48px; height: 48px; font-size: 12px; }
-  [data-btn="attack"]  { right: 96px; bottom: 30px; width: 76px; height: 76px; font-size: 16px; }
-  [data-btn="jump"]    { right: 16px; bottom: 60px; }
-  [data-btn="kick"]    { right: 176px; bottom: 22px; }
-  [data-btn="special"] { right: 110px; bottom: 120px; border-color: rgba(255,226,122,.7); }
-  [data-btn="swap"]    { right: 30px; bottom: 140px; width: 50px; height: 50px; font-size: 12px; }
-  [data-btn="run"]     { left: 176px; bottom: 30px; width: 52px; height: 52px; font-size: 12px; }
-  [data-btn="pause"]   { right: 12px; top: 12px; width: 44px; height: 44px; font-size: 12px; }
+  .btn { position: absolute; pointer-events: auto; box-sizing: border-box; border-radius: 50%; border: 2px solid var(--edge);
+    background: var(--btn); color: var(--ink); font: 12px 'DotGothic16', monospace; display: flex; align-items: center;
+    justify-content: center; width: var(--b); height: var(--b); touch-action: none; white-space: nowrap; letter-spacing: -.5px; }
+  .btn.on { background: var(--btn-on); transform: scale(.94); }
+  .btn.sm { width: calc(var(--b) * .7); height: calc(var(--b) * .7); font-size: 10px; }
+  .btn.lg { width: calc(var(--b) * 1.2); height: calc(var(--b) * 1.2); font-size: 16px; }
+  /* 左手：移動 */
+  [data-btn="left"]  { left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  [data-btn="right"] { left: calc(18px + var(--b) + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  [data-btn="run"]   { left: calc(14px + var(--b) * .65 + env(safe-area-inset-left, 0px)); bottom: calc(24px + var(--b) + env(safe-area-inset-bottom, 0px)); }
+  /* 右手：アクション */
+  [data-btn="attack"]  { right: calc(16px + var(--b) + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  [data-btn="jump"]    { right: calc(8px + env(safe-area-inset-right, 0px)); bottom: calc(26px + var(--b) * .45 + env(safe-area-inset-bottom, 0px)); }
+  [data-btn="kick"]    { right: calc(24px + var(--b) * 2.2 + env(safe-area-inset-right, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  [data-btn="special"] { right: calc(22px + var(--b) * 1.15 + env(safe-area-inset-right, 0px)); bottom: calc(22px + var(--b) * 1.2 + env(safe-area-inset-bottom, 0px)); border-color: var(--gold); }
+  [data-btn="swap"]    { right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(40px + var(--b) * 1.5 + env(safe-area-inset-bottom, 0px)); }
+  [data-btn="pause"]   { right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(44px + env(safe-area-inset-top, 0px)); border-radius: 10px; }
+  #rotate { display: none; position: fixed; inset: 0; z-index: 5; background: var(--bg); color: var(--ink);
+    flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; font-size: 18px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #rotate .ph { width: 54px; height: 92px; border: 3px solid var(--ink); border-radius: 10px; animation: rot 2s ease-in-out infinite; }
+  @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (prefers-reduced-motion: reduce) { #rotate .ph { animation: none; transform: rotate(-90deg); } }
+  @media (orientation: portrait) { body.touch #rotate { display: flex; } }
 </style>
-</head>
-<body>
-<canvas id="game" width="960" height="540"></canvas>
-<div id="touch">
+<div id="wrap"><canvas id="game" width="960" height="540"></canvas></div>
+<div id="touch" aria-hidden="true">
   <div class="btn" data-btn="left">◀</div>
   <div class="btn" data-btn="right">▶</div>
-  <div class="btn" data-btn="run">ダッシュ</div>
-  <div class="btn" data-btn="attack">攻撃</div>
+  <div class="btn sm" data-btn="run">ダッシュ</div>
+  <div class="btn lg" data-btn="attack">攻撃</div>
   <div class="btn" data-btn="jump">ジャンプ</div>
   <div class="btn" data-btn="kick">キック</div>
   <div class="btn" data-btn="special">必殺</div>
-  <div class="btn" data-btn="swap">武器</div>
-  <div class="btn" data-btn="pause">II</div>
+  <div class="btn sm" data-btn="swap">武器</div>
+  <div class="btn sm" data-btn="pause">II</div>
 </div>
+<div id="rotate"><div class="ph"></div><div>スマホを横向きにしてね</div><div style="font-size:13px;opacity:.7">This game is played in landscape.</div></div>
 <script src="src/sprite_data.js"></script>
 <script src="src/config.js"></script>
 <script src="src/audio.js"></script>

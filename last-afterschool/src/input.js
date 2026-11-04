@@ -28,7 +28,7 @@ const Input = (() => {
   addEventListener('keydown', e => {
     const b = KEYMAP[e.code];
     if (b) { e.preventDefault(); if (!e.repeat) down(b); }
-    Audio2.resume();
+    Audio2.unlock();
   });
   addEventListener('keyup', e => { const b = KEYMAP[e.code]; if (b) up(b); });
   addEventListener('blur', () => { for (const k in held) held[k] = false; });
@@ -37,12 +37,13 @@ const Input = (() => {
   function bindTouch() {
     document.querySelectorAll('[data-btn]').forEach(el => {
       const b = el.dataset.btn;
-      const on = e => { e.preventDefault(); Audio2.resume(); down(b); el.classList.add('on'); };
+      const on = e => { e.preventDefault(); Audio2.unlock(); try { el.setPointerCapture(e.pointerId); } catch (_) {} down(b); el.classList.add('on'); };
       const off = e => { e.preventDefault(); up(b); el.classList.remove('on'); };
       el.addEventListener('pointerdown', on);
       el.addEventListener('pointerup', off);
       el.addEventListener('pointercancel', off);
-      el.addEventListener('pointerleave', off);
+      el.addEventListener('lostpointercapture', off);
+      el.addEventListener('contextmenu', e => e.preventDefault());
     });
   }
 
