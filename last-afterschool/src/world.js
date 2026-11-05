@@ -235,7 +235,7 @@ class World {
   doSpecial(P) {
     // 今持っている武器で出す（机の時だけ2段目まで続ける）。武器がなければキック
     const key = P.weapon || 'kick';
-    P.startAttack(key, { special: true, chainNext: key === 'desk' ? 'desk2' : null });
+    P.startAttack(key, { special: true, chainNext: null });
     P.inv = 1.6; P.setFace('fluster', 1.6);
     this.partner.glow = 1.2; this.flash = 0.35; this.hitstop = 0.12;
     this.floatText(P.x, P.y - 170, 'フルスイング！！', '#ffe27a', 26);

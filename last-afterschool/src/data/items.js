@@ -19,9 +19,17 @@ const BIOME_PROPS = {
   castle_out: ['sky', 'layer0', 'layer1', 'layer2', 'ground', 'oneway', 'keep', 'throne', 'deadtree', 'deadtree2', 'abyss', 'skeleton', 'rubble', 'orb', 'i_dagger', 'i_sword', 'i_axe'],
   castle_in: ['sky', 'layer0', 'layer1', 'ground', 'oneway', 'candle', 'candle2', 'smallthrone', 'bonethrone', 'keep', 'throne', 'deadtree', 'deadtree2', 'deadtree3', 'furnace', 'chest', 'skeleton', 'rubble', 'i_dagger', 'i_sword', 'i_axe'],
 };
+// 町・学校（tools/extract_school.py）
+Object.assign(BIOME_PROPS, {
+  town2: ['band0', 'band1', 'band2', 'road', 'walk', 'brick', 'house', 'store', 'school', 'smith', 'lamp', 'lamp2', 'bench', 'tree', 'tree2', 'hedge', 'hedge2', 'postbox', 'plant', 'i_water'],
+  yard: ['band0', 'band1', 'band2', 'ground', 'soil', 'soilroad', 'wall', 'wallbroken', 'fence', 'school', 'garage', 'gate', 'lamp', 'lamp2', 'beams', 'beams2', 'lockers', 'lockers2'],
+  homeec: ['band0', 'band1', 'band2', 'floor', 'wall', 'wall2', 'ceiling', 'lockers', 'firebox', 'cabinet', 'fridge', 'counter', 'dishrack', 'stools', 'i_knife', 'i_pan', 'i_apron', 'i_recipe'],
+  roof: ['band0', 'band1', 'band2', 'floor', 'walkway', 'concrete', 'ac', 'lockers', 'entrance', 'tank', 'firebox', 'bench', 'bench2', 'rubble'],
+});
 for (const [b, list] of Object.entries(BIOME_PROPS)) for (const n of list) ENV[`${b}_${n}`] = `assets/env/${b}_${n}.png`;
 // 専用のアイコン画像がある装備
-const ITEM_ICON = { w_chair_pipe: 'assets/env/i_chair_pipe.png', w_bat_mop: 'assets/env/i_bat_mop.png', w_bat_metal: 'assets/env/i_bat_metal.png',
+const ITEM_ICON = { w_knife: ENV.homeec_i_knife, w_pan: ENV.homeec_i_pan, a_apron: ENV.homeec_i_apron, c_recipe: ENV.homeec_i_recipe,
+  w_chair_pipe: 'assets/env/i_chair_pipe.png', w_bat_mop: 'assets/env/i_bat_mop.png', w_bat_metal: 'assets/env/i_bat_metal.png',
   w_stone_dagger: ENV.desert_i_dagger, w_stone_sword: ENV.desert_i_sword, w_stone_axe: ENV.desert_i_axe,
   w_ice_dagger: ENV.snow_i_dagger, w_frost_sword: ENV.snow_i_sword, w_ice_axe: ENV.snow_i_axe,
   w_obsidian_dagger: ENV.volcano_i_dagger, w_magma_blade: ENV.volcano_i_sword, w_volcano_axe: ENV.volcano_i_axe,
@@ -46,6 +54,9 @@ const ITEM_BASES = {
   w_bat_wood:   { kind: 'weapon', type: 'bat',   name: '木製バット',     atk: 14, price: 60,  minFloor: 1 },
   w_bat_pipe:   { kind: 'weapon', type: 'bat',   name: '錆びた鉄パイプ', atk: 16, price: 90,  minFloor: 2 },
   w_bat_metal:  { kind: 'weapon', type: 'bat',   name: '金属バット',     atk: 19, price: 150, minFloor: 4 },
+  // 家庭科室の道具（本編の草原で出る。チュートリアルでは使わない）
+  w_knife:      { kind: 'weapon', type: 'dagger', name: '家庭科室の包丁', atk: 15, price: 110, minFloor: 2 },
+  w_pan:        { kind: 'weapon', type: 'bat',   name: 'フライパン',     atk: 17, price: 120, minFloor: 3, crit: 4 },
   w_bat_mop:    { kind: 'weapon', type: 'bat',   name: 'デッキブラシ',   atk: 17, price: 120, minFloor: 3, crit: 5 },
   // ---- 武器：椅子系（中） ----
   w_chair_class:{ kind: 'weapon', type: 'chair', name: '教室の椅子',     atk: 20, price: 80,  minFloor: 1 },
@@ -74,6 +85,7 @@ const ITEM_BASES = {
   w_king_sword:     { kind: 'weapon', type: 'sword', name: '魔王の魔王剣',   atk: 84, price: 2800, minFloor: 48 },
   // ---- 防具（見た目は変わらない） ----
   a_uniform:    { kind: 'armor', name: '制服',             def: 0,  hp: 0,  price: 0,   minFloor: 99 },
+  a_apron:      { kind: 'armor', name: 'エプロン',         def: 5, hp: 15, price: 100, minFloor: 1 },
   a_jersey:     { kind: 'armor', name: '学校ジャージ',     def: 6,  hp: 10, price: 120, minFloor: 1 },
   a_cardigan:   { kind: 'armor', name: 'カーディガン',     def: 10, hp: 0,  price: 160, minFloor: 2 },
   a_coat:       { kind: 'armor', name: '冬のコート',       def: 16, hp: 20, price: 260, minFloor: 5 },
@@ -82,6 +94,7 @@ const ITEM_BASES = {
   a_fireproof:  { kind: 'armor', name: '耐火の防護服',     def: 46, hp: 70, price: 1100, minFloor: 32 },
   a_darkmail:   { kind: 'armor', name: '黒鉄の胸当て',     def: 60, hp: 90, price: 1700, minFloor: 42 },
   // ---- アクセサリー ----
+  c_recipe:     { kind: 'accessory', name: 'レシピ本',     hp: 10, spd: 4, price: 110, minFloor: 2 },
   c_hairpin:    { kind: 'accessory', name: 'ヘアピン',     crit: 4,  price: 90,  minFloor: 1 },
   c_ribbon:     { kind: 'accessory', name: 'リボン',       hp: 15,   price: 90,  minFloor: 1 },
   c_watch:      { kind: 'accessory', name: '腕時計',       spd: 6,   price: 140, minFloor: 3 },

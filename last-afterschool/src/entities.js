@@ -323,15 +323,16 @@ class Player {
   // 手ぶらの振り（短剣・剣・斧）に、今の武器のアイコンを手の位置で重ねる
   drawOverlayWeapon(ctx, cam) {
     if (!this.anim.startsWith('swing_')) return;
-    const type = this.anim.slice(6), pose = HAND_POSE[type], it = this.item, im = it && it.icon && IMG[it.icon];
+    const type = this.anim.slice(6), pose = HAND_POSE[type], it = this.item;
+    const path = (it && it.icon) || (WEAPON_ART[type] && WEAPON_ART[type].file), im = path && IMG[path];   // プロローグは装備データがないので種類ごとの絵
     if (!pose || !im || !im.width) return;
     const set = SPRITE_DATA.swing[type], k = set.scale, [hx, hy, ang] = pose[Math.min(this.frame, pose.length - 1)];
-    const [gx, gy, len] = ICON_GRIP[type], s = len / Math.hypot(im.width, im.height);
+    const sp = ICON_SPEC[path] || ICON_GRIP[type], s = sp.size / Math.max(im.width, im.height);
     ctx.save();
     ctx.translate(Math.round(this.x - cam + this.face * hx * k), Math.round(this.y - hy * k));
     ctx.scale(this.face, 1);
-    ctx.rotate((ang + 45) * Math.PI / 180);   // アイコンは右上（-45度）を向いて描かれている
-    ctx.drawImage(im, -gx * im.width * s, -gy * im.height * s, im.width * s, im.height * s);
+    ctx.rotate((ang - sp.dir) * Math.PI / 180);   // 絵の向き（dir）を、そのコマの武器の向き（ang）に合わせる
+    ctx.drawImage(im, -sp.gx * im.width * s, -sp.gy * im.height * s, im.width * s, im.height * s);
     ctx.restore();
   }
   drawGuard(ctx, cam) {

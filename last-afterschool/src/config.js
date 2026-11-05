@@ -43,48 +43,37 @@ const WEAPONS = {
     hits: [{ frame: 4, dmg: 9, box: [5, -110, 105, -30], kb: 260, launch: 0, stop: 60 }],
     step: [0, 0, 20, 30, 60, 0, 0, 0], cancelAt: 5,
   },
-  // 振りは主人公の振りモーション（SPRITE_DATA.swing）。arc は属性の軌跡を出す先端位置の近似（度・前方が+90）
-  // バットは体の正面から後ろ側へ振り抜く絵なので、当たり判定は前後に広く取る
+  // バット・椅子・机：手ぶらの振りモーション（SPRITE_DATA.swing）に、武器の絵を手の位置で重ねる（HAND_POSE）
+  // バット：1撃（構え → 振りかぶり → 振り抜き）。プロローグのバットは校庭の砂を纏っている
   bat: {
-    name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swing_bat', swing: 'bat', size: 'S', weapon: 'bat', element: 'sand',
-    // 振り抜き感：構え（1〜2コマ目）で溜めて、3〜4コマ目を一瞬で振り抜き、5コマ目の振り切った姿勢で止める
-    frameMs: [90, 130, 35, 40, 170, 70, 70, 80],
-    arc: [-10, -20, -100, -110, -110, -100, -90, -10],
-    smear: { frame: 2, from: -95, to: 150, r: 78 },   // 頭上→正面→背中側へ弧を描く残像
-    hits: [
-      { frame: 2, dmg: 12, box: [-60, -150, 130, -5], kb: 200, stop: 60, shake: 3 },
-      { frame: 3, dmg: 16, box: [-150, -140, 120, -5], kb: 300, launch: 220, stop: 80, shake: 6 },
-    ],
-    step: [0, -10, 80, 40, 0, 0, 0, 0], cancelAt: 5,
+    name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swing_bat', swing: 'bat', size: 'S', overlay: true, last: true, element: 'sand',
+    frameMs: [50, 110, 70, 40, 90, 80, 80, 110],
+    smear: { frame: 3, from: -160, to: 40, r: 80 },
+    hits: [{ frame: 3, dmg: 20, box: [-20, -150, 140, -5], kb: 300, launch: 200, stop: 80, shake: 6 }],
+    step: [0, 0, 30, 70, 30, 0, 0, 0], cancelAt: 5,
   },
+  // 椅子：2連（横に振り抜く → 頭上から叩きつける）
   chair: {
-    name: '椅子', from: '椅子', icon: 'chair', anim: 'swing_chair', swing: 'chair', size: 'M', weapon: 'chair',
-    frameMs: [80, 90, 70, 70, 80, 90, 90, 100],
-    arc: [0, -60, 40, 90, 90, 90, 60, 0],
-    hits: [
-      { frame: 3, dmg: 14, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
-      { frame: 5, dmg: 20, box: [-20, -140, 145, -5], kb: 300, launch: 180, stop: 80, shake: 6 },
-    ],
-    step: [0, 0, 40, 40, 50, 30, 0, 0], cancelAt: 6,
+    name: '椅子', from: '椅子', icon: 'chair', anim: 'swing_chair', swing: 'chair', size: 'M', overlay: true, next: 'chair2',
+    frameMap: [0, 1, 2, 3], frameMs: [60, 120, 70, 140],
+    hits: [{ frame: 2, dmg: 16, box: [-20, -150, 140, -5], kb: 240, stop: 70, shake: 4 }],
+    step: [0, 0, 60, 20], cancelAt: 3,
   },
+  chair2: {
+    name: '椅子', anim: 'swing_chair', swing: 'chair', size: 'M', overlay: true, last: true, hidden: true,
+    frameMap: [4, 5, 6, 7], frameMs: [70, 150, 80, 170],
+    hits: [{ frame: 2, dmg: 22, box: [-20, -180, 150, -5], kb: 320, launch: 260, stop: 90, shake: 7 }],
+    step: [0, 0, 60, 20], cancelAt: 3,
+  },
+  // 机：1撃（持ち上げて振り上げ → 振りかぶって地面に叩きつける）
   desk: {
-    name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk',
-    frameMs: [110, 100, 90, 90, 220, 140],
-    arc: [0, -60, -40, -20, 90, 0],
-    hits: [{ frame: 4, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, slam: true }],
-    step: [0, 0, 20, 30, 60, 0], cancelAt: 5, next: 'desk2',
-  },
-  // 机の2段目：振りモーションの後半を速く再生して、もう一度叩きつける
-  desk2: {
-    name: '追い打ち', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk', hidden: true,
-    frameMap: [2, 3, 4],
-    frameMs: [70, 70, 220],
-    arc: [-40, -20, 90],
+    name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', overlay: true, last: true,
+    frameMs: [80, 140, 90, 110, 80, 170, 90, 260],
     hits: [
-      { frame: 1, dmg: 22, box: [-30, -170, 180, 5], kb: 300, stop: 70, shake: 6 },
-      { frame: 2, dmg: 34, box: [-20, -170, 200, 10], kb: 480, launch: 300, stop: 110, shake: 10 },
+      { frame: 2, dmg: 14, box: [-20, -200, 150, -10], kb: 200, launch: 200, stop: 60, shake: 4 },
+      { frame: 6, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, slam: true },
     ],
-    step: [30, 40, 0], cancelAt: 2,
+    step: [0, 20, 30, 0, 0, 0, 60, 0], cancelAt: 7,
   },
   // ---- 短剣・剣・斧：手ぶらの振りモーションに、その武器のアイコンを手の位置で重ねる（HAND_POSE） ----
   // 短剣：4連（突き → 低い突き → 突き上げ → 踏み込み突き）
@@ -369,9 +358,24 @@ function expNeed(lv) { return 20 + lv * 10 + lv * lv * 6; }
 // 手ぶらの振りの各コマで、武器を握る手の位置と武器の向き [x, y, 角度]
 // x・y は主人公の足元からのドット（素材の大きさ。右向き・上が＋）、角度は画面上の向き（0＝右、-90＝真上、90＝真下）
 const HAND_POSE = {
+  bat:    [[-30, 122, 100], [-40, 220, -150], [30, 245, -170], [63, 198, -10], [70, 225, -60], [-60, 165, 200], [-58, 162, 200], [-35, 122, 100]],
+  chair:  [[40, 125, 50], [-60, 150, 160], [55, 162, 0], [63, 190, -20], [20, 153, 80], [-48, 260, -130], [52, 208, 20], [80, 190, 10]],
+  desk:   [[-32, 120, 100], [75, 105, 30], [52, 215, -60], [50, 225, -90], [27, 153, 100], [-50, 257, -135], [30, 148, 40], [45, 70, 15]],
   dagger: [[50, 125, 25], [57, 190, -60], [67, 190, 0], [52, 133, 10], [60, 260, -80], [80, 205, 0], [45, 180, -20], [42, 140, 35]],
   sword:  [[55, 195, -70], [53, 243, -105], [82, 110, 60], [60, 162, 140], [30, 160, -5], [50, 135, 30], [78, 235, -60], [42, 140, 70]],
   axe:    [[55, 133, -50], [-52, 240, -130], [65, 212, -15], [45, 135, 70], [5, 145, 150], [-50, 250, -120], [53, 247, 95], [42, 140, 70]],
 };
-// アイコンの持ち手の位置（絵の幅・高さに対する割合）と、表示する長さ（ゲーム内のドット）。アイコンは柄が左下・先が右上に描かれている
-const ICON_GRIP = { dagger: [0.24, 0.8, 46], sword: [0.18, 0.84, 74], axe: [0.13, 0.9, 84] };
+// 武器の絵の持ち方：gx・gy＝握る位置（絵の幅・高さに対する割合）、dir＝絵の中で握りから先端へ向かう向き（度）、
+// size＝ゲーム内での大きさ（絵の長辺のドット数）。ICON_SPEC は絵ごと、なければ ICON_GRIP（種類ごと）を使う
+const ICON_GRIP = { dagger: { gx: 0.24, gy: 0.8, dir: -45, size: 34 }, sword: { gx: 0.18, gy: 0.84, dir: -45, size: 54 }, axe: { gx: 0.13, gy: 0.9, dir: -45, size: 60 },
+  bat: { gx: 0.12, gy: 0.9, dir: -55, size: 62 }, chair: { gx: 0.15, gy: 0.95, dir: -80, size: 54 }, desk: { gx: 0.1, gy: 0.95, dir: -55, size: 74 } };
+const ICON_SPEC = {
+  'assets/weapons/weapon_bat.png': { gx: 0.5, gy: 0.93, dir: -90, size: 62 },
+  'assets/weapons/weapon_chair.png': { gx: 0.12, gy: 0.95, dir: -95, size: 54 },
+  'assets/weapons/weapon_desk.png': { gx: 0.08, gy: 0.95, dir: -50, size: 76 },
+  'assets/env/i_bat_metal.png': { gx: 0.12, gy: 0.92, dir: -62, size: 66 },
+  'assets/env/i_bat_mop.png': { gx: 0.88, gy: 0.06, dir: 112, size: 70 },
+  'assets/env/i_chair_pipe.png': { gx: 0.15, gy: 0.95, dir: -80, size: 58 },
+  'assets/env/homeec_i_knife.png': { gx: 0.1, gy: 0.9, dir: -45, size: 34 },
+  'assets/env/homeec_i_pan.png': { gx: 0.92, gy: 0.08, dir: 140, size: 46 },
+};

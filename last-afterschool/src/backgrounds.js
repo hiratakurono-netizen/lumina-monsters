@@ -255,6 +255,27 @@ const Backgrounds = (() => {
     sx.drawImage(sky, 0, 0, sky.width, sky.height, 0, 0, VIEW_W, Math.max(bottom + 40, sky.height * k));
     return { sky: s, layers: out, floor: floorTile([['#1a1018', 0, 72]]), ambient: { snow: 'snowfall', volcano: 'ember', desert: 'sand', castle_out: 'ash', castle_in: 'dust' }[name] || 'mote' };
   }
+  // 町・学校：3本の帯（遠景・中景・近景）は1枚の絵を横に切ったもの。上から順に積み、近景の下端を地面に合わせる
+  function stackedArt(name, opts = {}) {
+    const bands = (opts.bands || [0, 1, 2]).map(i => IMG[ENV[`${name}_band${i}`]]);
+    if (bands.some(b => !b || !b.width)) return null;
+    const total = bands.reduce((t, b) => t + b.height, 0);
+    const k = (GROUND_Y + 10) / total * (opts.zoom || 1);
+    const mirror = im => {
+      const w = Math.round(im.width * k), h = Math.round(im.height * k), [c, x] = cv(w * 2, h);
+      x.drawImage(im, 0, 0, w, h); x.save(); x.translate(w * 2, 0); x.scale(-1, 1); x.drawImage(im, 0, 0, w, h); x.restore();
+      return c;
+    };
+    const layers = []; let y = GROUND_Y + 10 - total * k;
+    const f = opts.speeds || [0.3, 0.45, 0.6];
+    bands.forEach((b, i) => { const img = mirror(b); layers.push({ img, f: f[i], y: Math.round(y) }); y += b.height * k; });
+    const [s, sx] = cv(VIEW_W, VIEW_H);
+    sx.fillStyle = opts.sky || '#2b4f8a'; sx.fillRect(0, 0, VIEW_W, VIEW_H);
+    if (opts.skyImg) { const im = IMG[ENV[opts.skyImg]]; if (im && im.width) sx.drawImage(im, 0, 0, VIEW_W, Math.max(layers[0].y + 30, 140)); }
+    const tex = IMG[ENV[opts.ground]];
+    const floor = floorTile([['#2a2632', 0, 72]], fx => { if (tex && tex.width) for (let i = 0; i < 1920; i += tex.width) { fx.drawImage(tex, i, 0, tex.width, 46); fx.drawImage(tex, 0, 14, tex.width, 30, i, 46, tex.width, 30); } });
+    return { sky: s, layers, floor, ambient: opts.ambient || 'mote', dim: opts.dim };
+  }
   function grassland() {
     const art = grasslandArt(); if (art) return art;
     const s = sky([[0, '#1f1838'], [0.5, '#3d3a6a'], [1, '#6a8a8a']], x => {
@@ -293,10 +314,16 @@ const Backgrounds = (() => {
   const cache = {};
   function get(name) {
     if (!cache[name]) cache[name] = ({
-      street, schoolyard, corridor, homeec, town, grassland,
+      street: () => stackedArt('town2', { ground: 'town2_road', sky: '#7fb6e8', ambient: 'petal' }) || street(),
+      schoolyard: () => stackedArt('yard', { ground: 'yard_ground', sky: '#3b6aa0', ambient: 'ash' }) || schoolyard(),
+      corridor: () => stackedArt('homeec', { ground: 'homeec_floor', sky: '#2a3f60', ambient: 'ash', dim: 0.08 }) || corridor(),
+      homeec: () => stackedArt('homeec', { ground: 'homeec_floor', sky: '#2a3f60', ambient: 'steam' }) || homeec(),
+      rooftop: () => stackedArt('roof', { ground: 'roof_floor', sky: '#8a1424', skyImg: 'roof_band0', bands: [1, 2], speeds: [0.35, 0.6], zoom: 0.72, ambient: 'ember' }) || rooftop(false),
+      town: () => stackedArt('town2', { ground: 'town2_walk', sky: '#7fb6e8', ambient: 'petal' }) || town(),
+      grassland,
       desert: () => biomeArt('desert', 2), snow: () => biomeArt('snow', 3), volcano: () => biomeArt('volcano', 3),
       castle_out: () => biomeArt('castle_out', 3), castle_in: () => biomeArt('castle_in', 2, 2.45, 0.97, false),   // 城内：広間の帯を大きくして画面を埋める
-      rooftop: () => rooftop(false), rooftop_calm: () => rooftop(true),
+      rooftop_calm: () => rooftop(true),
     })[name]();
     return cache[name];
   }

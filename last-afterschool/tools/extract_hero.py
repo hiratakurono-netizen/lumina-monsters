@@ -22,9 +22,9 @@ SHEETS = {  # anim name: (sheet file, expected frame count)
     'run': ('hero_run.jpg', 8),
     'kick': ('hero_kick.jpg', 8),
     'hurt': ('hero_hurt.jpg', 7),
-    'bat': ('hero_bat.jpg', 8),
-    'chair': ('hero_chair.jpg', 8),
-    'desk': ('hero_desk.jpg', 8),
+    'bat': ('hero_bat2.jpg', 8),      # 手ぶらの振り（武器は手の位置に重ねる）
+    'chair': ('hero_chair2.jpg', 8),
+    'desk': ('hero_desk2.jpg', 8),
     # 手ぶらの振り（武器は手の位置に後から重ねる）：短剣4連・剣3連・斧2連
     'dagger': ('hero_dagger.jpg', 8),
     'sword': ('hero_sword.jpg', 8),
@@ -32,9 +32,9 @@ SHEETS = {  # anim name: (sheet file, expected frame count)
 }
 # 武器のシートは主人公が小さめに描かれているので、頭頂〜胸のリボンの長さ（待機・歩き・走り・蹴りで約106px）
 # がそろうように拡大する。机はリボンが隠れるので、机を持って直立したコマの身長で合わせた値。
-SIZE_FIX = {'bat': 1.06, 'chair': 1.17, 'desk': 1.05}
+SIZE_FIX = {}   # 手ぶらの振りは待機と同じ大きさで描かれている
 # 元の素材で机が縦にまっすぐ切れているコマ（机の5・6コマ目）は使わない
-DROP = {'desk': (5, 6)}
+DROP = {}
 SMART_SPLIT = ('hero_kick.jpg',)
 TARGET_FIG_H = 264   # 待機の身長（保存サイズ）。ゲーム内では0.5倍＝132。主人公の大きさを変える時はここと config.js の HERO_SIZE を合わせる
 WORLD_SCALE = 0.5
@@ -126,6 +126,9 @@ def figures(path, expect):
     # 細かい破片（髪の毛先など）は、一番近い大きな塊にくっつける
     for c in comps.values():
         if c['n'] >= 1500 or c['n'] < 6: continue
+        # 素材の上に書かれた見出し（黒い文字）は捨てる
+        ys, xs = np.nonzero(lab == L if False else np.isin(lab, c['L']))
+        if rgb[ys, xs].astype(int).sum(axis=1).mean() < 110: continue
         cx, cy = (c['x0'] + c['x1']) / 2, (c['y0'] + c['y1']) / 2
         def dist(B):
             dx = max(B['x0'] - cx, 0, cx - B['x1']); dy = max(B['y0'] - cy, 0, cy - B['y1'])
