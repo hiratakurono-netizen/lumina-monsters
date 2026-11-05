@@ -15,6 +15,9 @@ class World {
     this.state = 'intro'; this.dialogue = null; this.wave = null; this.spawnQ = []; this.goArrow = 0;
     this.combo = 0; this.comboT = 0; this.bestCombo = 0; this.boss = null; this.time = 0; this.ambT = 0;
     this.endTriggered = false;
+    // ダンジョン：生成された敵と宝箱を置く（敵は主人公が近づくまで眠っている）
+    this.chests = (this.ch.chests || []).map(c => Object.assign({ opened: false, t: 0 }, c));
+    for (const sp of this.ch.spawns || []) { const e = this.makeEnemy(sp.type, sp.x, sp.y, sp); e.awake = false; e.spawnT = 0; this.enemies.push(e); }
   }
 
   // ---------------- flow ----------------
@@ -63,6 +66,7 @@ class World {
     for (const p of this.projs) p.update(dt);
     this.projs = this.projs.filter(p => !p.dead);
     this.updatePickups(dt);
+    if (this.ch.dungeon) this.updateDungeon(dt);
     this.updateWave(dt);
     this.updateFx(dt);
 
@@ -92,6 +96,7 @@ class World {
       if (ev.type === 'talk' && P.x >= ev.x) { ev.done = true; this.say(ev.lines); return; }
       if (ev.type === 'wave' && P.x >= ev.x) { ev.done = true; this.startWave(ev); return; }
       if (ev.type === 'boss' && P.x >= ev.x) { ev.done = true; this.startBoss(ev); return; }
+      if (ev.type === 'boss_dg' && P.x >= ev.x) { ev.done = true; this.startBossDg(); return; }
     }
     if (!this.wave && P.x >= this.ch.endX) this.finish();
   }
@@ -108,6 +113,15 @@ class World {
     b.cool = 2.5; this.enemies.push(b); this.boss = b;
     this.bossIntro = 2.2; Audio2.sfx('warn'); this.shake = 10;
     this.wave = { ev, idx: 99, delay: 0, t: 0, boss: true };
+  }
+  // ダンジョンのボス：ボス部屋でカメラを止めて登場させる。倒すと出口が開く
+  startBossDg() {
+    const B = this.ch.boss, min = clamp(B.x - 1000, 0, this.ch.length - VIEW_W);
+    this.camLock = { min, max: min + 340 };
+    const b = this.makeEnemy(B.type, B.x, undefined, { hpMul: B.hpMul });
+    b.cool = 2.5; this.enemies.push(b); this.boss = b;
+    this.bossIntro = 2.2; Audio2.sfx('warn'); this.shake = 10;
+    this.wave = { ev: { waves: [] }, idx: 99, delay: 0, t: 0, boss: true };
   }
   updateWave(dt) {
     const w = this.wave; if (!w || this.dialogue) return;
@@ -126,7 +140,8 @@ class World {
       if (this.enemies.length < 3 && !this.spawnQ.length) this.queueWave(w.ev.waves[0]);
       return;
     }
-    if (this.enemies.length === 0 && this.spawnQ.length === 0) {
+    // ウェーブで湧いた敵だけを数える（ダンジョンに置かれた眠っている敵は数えない）
+    if (!this.enemies.some(e => e.fromWave) && this.spawnQ.length === 0) {
       w.delay -= dt;
       if (w.delay <= 0) {
         w.idx++;
@@ -139,10 +154,17 @@ class World {
   spawn(type, side) {
     const d = ENEMIES[type];
     const x = side > 0 ? this.camX + VIEW_W + 20 : this.camX - 20;
-    const gy = this.terrain.groundBelow(x, -1000, 0);
-    const y = d.fly ? GROUND_Y - 180 - rand(0, 60) : (gy < Infinity ? gy : GROUND_Y);
+    const e = this.makeEnemy(type, x, d.fly ? GROUND_Y - 180 - rand(0, 60) : undefined, this.wave && this.wave.ev);
+    e.vx = -side * 120; e.fromWave = true; this.enemies.push(e);
+  }
+  // 敵を作る。y を省くとその下の地面に立たせる。scale.hpMul / dmgMul で深い階ほど強く
+  makeEnemy(type, x, y, scale) {
+    const d = ENEMIES[type];
+    if (y === undefined) { const gy = this.terrain.groundBelow(x, -1000, 0); y = d.fly ? GROUND_Y - 180 : (gy < Infinity ? gy : GROUND_Y); }
     const e = new Enemy(this, type, x, y);
-    e.vx = -side * 120; this.enemies.push(e);
+    if (scale && scale.hpMul) { e.hp = e.maxHp = Math.round(d.hp * scale.hpMul); }
+    if (scale && scale.dmgMul) e.dmgMul = scale.dmgMul;
+    return e;
   }
 
   // ---------------- combat ----------------
@@ -171,10 +193,14 @@ class World {
       if (el === 'fire') mul *= 1.25;
       if (e.d.weak) mul *= e.d.weak === el ? 2 : 0.5;
       if (e.phased && el !== 'fire') { this.floatText(e.x, e.y - e.d.h - 10, 'MISS', '#9aa', 14); continue; }
-      const crit = Math.random() < 0.1; if (crit) mul *= 1.5;
+      const it = P.wItems && atk.key !== 'kick' ? P.item : null;   // 本編：装備した武器の威力・付与効果
+      if (it) mul *= it.powerMul * (1 + ((P.stats ? P.stats.atkPct : 0) + it.atkPct) / 100);
+      const critRate = ((P.stats ? P.stats.crit : 10) + (it ? it.crit : 0)) / 100;
+      const crit = Math.random() < critRate; if (crit) mul *= 1.5;
       const dmg = Math.round(h.dmg * mul * rand(0.92, 1.08));
       any = true;
       e.damage(dmg, P.x);
+      if (it && it.steal) P.hp = Math.min(P.maxHp, P.hp + dmg * it.steal / 100);   // HP吸収
       if (crit) this.floatText(e.x, e.y - e.d.h - 34, 'CRITICAL!', '#ffe27a', 14);
       if (e.boss) {
         e.poise += dmg;
@@ -213,13 +239,15 @@ class World {
     if (e.dying > 0) return;
     e.dying = e.boss ? 2.2 : 0.45; e.vx = 0; Audio2.sfx('die');
     this.spark(e.x, e.y - e.d.h / 2, '#e8d8ff', 14);
-    this.player.gainExp(e.d.exp);
+    const fl = this.ch.dungeon ? this.ch.floor : 1;
+    this.player.gainExp(Math.round(e.d.exp * (1 + 0.15 * (fl - 1))));
+    if (this.ch.dungeon) this.dropGold(e.x, e.y - 30, Math.round((3 + fl * 2) * (e.boss ? 15 : 1) * rand(0.7, 1.3)));
     if (!e.boss && Math.random() < 0.13) this.pickups.push({ x: e.x, y: e.y - 40, vy: -260, t: 0, kind: 'milk' });
     if (e.boss) {
       this.slowmo = 1.8; this.flash = 1; this.shake = 24; Audio2.sfx('slam');
       for (let i = 0; i < 60; i++) this.fx.push(new Particle({ x: e.x + rand(-90, 90), y: e.y - rand(0, 180), vx: rand(-300, 300), vy: rand(-500, -100), g: 900, life: rand(0.8, 1.6), size: rand(6, 14), color: ['#7d7488', '#a49ab0', '#5d556a'][i % 3] }));
       this.projs = [];
-      setTimeout(() => { this.wave = null; this.boss = null; this.finish(); }, 2600);
+      setTimeout(() => { this.wave = null; this.boss = null; if (this.ch.dungeon) { this.camLock = null; this.bossDefeated = true; this.goArrow = 3; } else this.finish(); }, 2600);
     }
   }
 
@@ -240,13 +268,64 @@ class World {
       }
     }
     for (const p of this.pickups) {
-      p.t += dt; p.vy += 1200 * dt; p.y += p.vy * dt; if (p.y > GROUND_Y - 12) { p.y = GROUND_Y - 12; p.vy = 0; }
+      p.t += dt; p.x += (p.vx || 0) * dt; p.vx = (p.vx || 0) * 0.96; p.vy += 1200 * dt; p.y += p.vy * dt;
+      const gy = this.terrain.groundBelow(p.x, p.y - p.vy * dt + 12, 0) - 12;
+      if (p.y > gy) { p.y = gy; p.vy = 0; }
+      if (p.y > VIEW_H + 60) p.dead = true;
       if (Math.abs(P.x - p.x) < 30 && Math.abs(P.y - 40 - p.y) < 70) {
-        p.dead = true; P.hp = Math.min(P.maxHp, P.hp + 22); Audio2.sfx('heal'); this.floatText(P.x, P.y - 130, 'いちごミルク +22', '#ffb6d0', 15);
+        p.dead = true;
+        if (p.kind === 'gold') { this.game.addRunGold(p.v); Audio2.sfx('blip'); this.floatText(P.x, P.y - 130, `+${p.v} G`, '#ffe27a', 15); }
+        else { P.hp = Math.min(P.maxHp, P.hp + 22); Audio2.sfx('heal'); this.floatText(P.x, P.y - 130, 'いちごミルク +22', '#ffb6d0', 15); }
       }
       if (p.t > 12) p.dead = true;
     }
     this.pickups = this.pickups.filter(p => !p.dead);
+  }
+
+  // ---------------- dungeon（宝箱・ゴールド・出口） ----------------
+  dropGold(x, y, total) {
+    const n = Math.min(5, 1 + Math.floor(total / 12));
+    for (let i = 0; i < n; i++) this.pickups.push({ kind: 'gold', v: Math.max(1, Math.round(total / n)), x, y, vx: rand(-140, 140), vy: rand(-420, -220), t: 0 });
+  }
+  updateDungeon(dt) {
+    const P = this.player;
+    for (const c of this.chests) {
+      c.t += dt;
+      if (c.opened || this.state !== 'play') continue;
+      if (Math.abs(P.x - c.x) < 40 && Math.abs(P.y - c.y) < 12) {
+        // 宝箱を開ける。中身は今はゴールドだけ（装備のドロップは次の段階で追加：仮）
+        c.opened = true; Audio2.sfx('pickup'); this.flash = 0.25;
+        this.dropGold(c.x, c.y - 30, Math.round((15 + c.floor * 8) * (c.hidden ? 3 : 1) * rand(0.8, 1.2)));
+        this.floatText(c.x, c.y - 70, c.hidden ? '隠し宝箱！' : '宝箱', '#ffe27a', 16);
+      }
+    }
+    // 出口（ボス階はボスを倒すまで閉じている）
+    const open = !this.ch.boss || this.bossDefeated;
+    if (open && !this.exitUsed && this.state === 'play' && !this.dialogue && P.onGround && Math.abs(P.x - this.ch.exitX) < 40) {
+      this.exitUsed = true; Audio2.sfx('transform'); this.flash = 0.5;
+      this.game.floorCleared(this);
+    }
+  }
+  drawDungeon(ctx, cam) {
+    for (const c of this.chests) {
+      const x = c.x - cam, y = c.y;
+      if (x < -60 || x > VIEW_W + 60) continue;
+      const lid = c.opened ? -10 : 0;
+      ctx.fillStyle = c.hidden ? '#b98a2a' : '#8a5a3a'; ctx.fillRect(x - 18, y - 22, 36, 22);
+      ctx.fillStyle = c.hidden ? '#ffd36a' : '#c9a77e'; ctx.fillRect(x - 20, y - 30 + lid, 40, 10);
+      ctx.fillStyle = '#ffe27a'; ctx.fillRect(x - 3, y - 18, 6, 6);
+      if (!c.opened) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.25 + Math.sin(c.t * 4) * 0.12; ctx.fillStyle = c.hidden ? '#ffd36a' : '#fff0c8'; ctx.beginPath(); ctx.arc(x, y - 16, 30, 0, 7); ctx.fill(); ctx.restore(); }
+    }
+    // 出口のゲート
+    const ex = this.ch.exitX - cam, open = !this.ch.boss || this.bossDefeated;
+    if (ex > -100 && ex < VIEW_W + 100) {
+      const t = this.time, gy = this.terrain.groundBelow(this.ch.exitX, 0, 0);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = open ? 0.75 + Math.sin(t * 3) * 0.15 : 0.25;
+      const g = ctx.createRadialGradient(ex, gy - 70, 5, ex, gy - 70, 80); g.addColorStop(0, open ? '#e8d0ff' : '#776688'); g.addColorStop(1, 'rgba(80,40,160,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(ex, gy - 70, 46, 78, 0, 0, 7); ctx.fill(); ctx.restore();
+      ctx.font = `14px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = open ? '#ffe9a8' : '#9d90c8';
+      ctx.fillText(open ? (this.ch.floor % 5 === 0 ? '出口（帰還できる）' : '出口') : '封印されている', ex, gy - 160); ctx.textAlign = 'left';
+    }
   }
 
   // ---------------- particles ----------------
@@ -298,7 +377,8 @@ class World {
       ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 3;
       const lab = ITEMS[it.ev.item].label; ctx.strokeText(lab, x, y - 48); ctx.fillText(lab, x, y - 48); ctx.textAlign = 'left';
     }
-    for (const p of this.pickups) Icons.draw(ctx, 'milk', p.x - cam, p.y, 2, p.t > 9 && Math.floor(p.t * 8) % 2);
+    for (const p of this.pickups) Icons.draw(ctx, p.kind === 'gold' ? 'gold' : 'milk', p.x - cam, p.y, 2, p.t > 9 && Math.floor(p.t * 8) % 2);
+    if (this.ch.dungeon) this.drawDungeon(ctx, cam);
   }
   drawProps(ctx, cam) {
     for (const ev of this.events) if (ev.prop) Props[ev.prop] && Props[ev.prop](ctx, ev.x - cam + 60, this.time);
@@ -320,6 +400,7 @@ const Icons = {
       case 'stove': R('#5f6470', -14, -6, 28, 14); R('#2a2d35', -12, -8, 10, 2); R('#2a2d35', 2, -8, 10, 2);
         ctx.fillStyle = '#6ab4ff'; for (let i = 0; i < 3; i++) R('#6ab4ff', -11 + i * 3, -12 - (i % 2) * 2, 2, 4); for (let i = 0; i < 3; i++) R('#9fd0ff', 3 + i * 3, -12 - ((i + 1) % 2) * 2, 2, 4);
         R('#e6e6ea', -10, 2, 4, 3); R('#e6e6ea', 6, 2, 4, 3); break;
+      case 'gold': R('#b8860b', -5, -5, 10, 10); R('#ffd36a', -4, -4, 8, 8); R('#fff3b0', -2, -3, 2, 4); break;
       case 'milk': R('#fff', -5, -8, 10, 14); R('#ff9ec0', -5, -2, 10, 8); R('#fff', -5, -11, 10, 3); R('#e07aa0', -2, 0, 4, 3); break;
       case 'kick': R('#e8e4f0', -6, -2, 12, 5); R('#3a3550', -6, 3, 12, 2); R('#2a2540', -3, -10, 5, 8); break;
       case 'fire': ctx.fillStyle = '#ff7a2a'; ctx.beginPath(); ctx.moveTo(0, -10); ctx.quadraticCurveTo(8, 0, 0, 8); ctx.quadraticCurveTo(-8, 0, 0, -10); ctx.fill(); R('#ffd27a', -2, 0, 4, 5); break;

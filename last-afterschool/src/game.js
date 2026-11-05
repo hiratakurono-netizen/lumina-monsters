@@ -116,7 +116,9 @@ function drawHud(ctx, W) {
     if (k && P.fire) Icons.draw(ctx, 'fire', x + 31, y + 32, 0.6);
   }
   ctx.font = `11px ${FONT}`; ctx.fillStyle = '#b9aee0';
-  ctx.fillText(P.weapon ? WEAPONS[P.weapon].name : (P.canFight ? '素手（キック）' : ''), 304, 84);
+  if (P.item) ctx.fillStyle = P.item.rarity.color;
+  ctx.fillText(P.item ? P.item.name : P.weapon ? WEAPONS[P.weapon].name : (P.canFight ? '素手（キック）' : ''), 304, 84);
+  if (W.ch.dungeon) { ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffe27a'; const g = `所持金 ${Game.save.gold} G` + (Game.run ? `（今回 +${Game.run.gained}）` : ''); ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4; ctx.strokeText(g, 20, IS_TOUCH ? 152 : 128); ctx.fillText(g, 20, IS_TOUCH ? 152 : 128); }
   // 下部
   ctx.font = `18px ${FONT}`; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4;
   // スマホでは下端がボタンに隠れるので Lv/TIME を上に置く
@@ -205,6 +207,7 @@ const Game = {
     this.fade = Math.max(0, this.fade - dt * 1.6);
     const S = this['u_' + this.scene]; if (S) S.call(this, dt);
     document.body.classList.toggle('town', (this.scene === 'play' || this.scene === 'card') && !!(this.world && this.world.ch.town));
+    document.body.classList.toggle('dungeon', this.scene === 'play' && !!(this.world && this.world.ch.dungeon));
     this.tapAt = null;
     Input.endFrame();
   },
@@ -402,6 +405,7 @@ const Game = {
       return;
     }
     if (Input.hit('pause') && !W.dialogue && W.state === 'play') { this.paused = true; this.pauseIdx = 0; Input.endFrame(); return; }
+    if (W.ch.dungeon && Input.hit('item') && !W.dialogue && W.state === 'play') { this.openItemMenu(); return; }   // 戦闘中のアイテム
     // 武器を持っていない時はガードボタンを出さない
     const gb = document.querySelector('[data-btn="guard"]'); if (gb) gb.hidden = W.player.weapons.length === 0;
     W.update(Math.min(dt, 1 / 30));

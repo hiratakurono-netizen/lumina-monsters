@@ -90,6 +90,9 @@
   body.ui-open #touch { display: none; }
   /* 町では戦闘ボタンを隠し、近くに施設がある時だけ「しらべる」を出す */
   body.town [data-btn="attack"], body.town [data-btn="kick"], body.town [data-btn="special"], body.town [data-btn="swap"], body.town [data-btn="guard"] { display: none; }
+  /* ダンジョンだけ「道具」ボタンを出す */
+  [data-btn="item"] { display: none; right: calc(10px + env(safe-area-inset-right, 0px)); top: calc(52px + var(--b) * .7 + env(safe-area-inset-top, 0px)); border-radius: 10px; border-color: rgba(143, 224, 160, .8); }
+  body.dungeon [data-btn="item"] { display: flex; }
   [data-btn="down"] { right: calc(20px + var(--b) * 1.1 + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: calc(var(--b) * 1.2); height: calc(var(--b) * 1.2); border-color: var(--gold); font-size: 15px; }
 </style>
 <div id="wrap"><canvas id="game" width="1920" height="1080"></canvas></div>
@@ -105,6 +108,7 @@
   <div class="btn sm" data-btn="swap">武器</div>
   <div class="btn sm" data-btn="pause">II</div>
   <div class="btn" data-btn="down" hidden>しらべる</div>
+  <div class="btn sm" data-btn="item">道具</div>
 </div>
 <div id="rotate"><div class="ph"></div><div>スマホを横向きにしてね</div><div style="font-size:13px;opacity:.7">This game is played in landscape.</div></div>
 <script src="src/sprite_data.js"></script>
@@ -121,8 +125,11 @@
 <script src="src/systems/inventory.js"></script>
 <script src="src/systems/stats.js"></script>
 <script src="src/ui/menu.js"></script>
+<script src="src/data/dungeons.js"></script>
+<script src="src/dungeon/generator.js"></script>
 <script src="src/town/town.js"></script>
 <script src="src/game.js"></script>
+<script src="src/dungeon/run.js"></script>
 <script src="src/dev/test_rooms.js"></script>
 </body>
 </html>

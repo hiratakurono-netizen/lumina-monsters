@@ -215,6 +215,35 @@ const Backgrounds = (() => {
     return { sky: s, layers: [{ img: far, f: 0.15, y: 50 }, { img: m, f: 0.5, y: 0 }], floor, ambient: 'petal' };
   }
 
+
+  // 魔界・草原（紫がかった空と草の丘。床は暗い奈落＝穴の底に見える）
+  function grassland() {
+    const s = sky([[0, '#1f1838'], [0.5, '#3d3a6a'], [1, '#6a8a8a']], x => {
+      x.fillStyle = 'rgba(220,240,255,.75)'; x.beginPath(); x.arc(760, 110, 52, 0, 7); x.fill();
+      x.fillStyle = 'rgba(31,24,56,.9)'; x.beginPath(); x.arc(780, 100, 46, 0, 7); x.fill();   // 欠けた月
+      crack(x, 260, 70, 120, 0.35, 33);
+    });
+    const [far, fx] = cv(1920, 420), r = rng(5);
+    fx.fillStyle = '#2e2a52';
+    for (let i = 0; i < 9; i++) { const bx = i * 220 + r() * 60, h = 120 + r() * 120; fx.beginPath(); fx.moveTo(bx - 140, 420); fx.lineTo(bx, 420 - h); fx.lineTo(bx + 140, 420); fx.fill(); }
+    fx.fillStyle = '#3a4a62';
+    for (let i = 0; i < 6; i++) { const bx = i * 330 + r() * 80; fx.beginPath(); fx.ellipse(bx, 420, 220, 90 + r() * 40, 0, Math.PI, 0); fx.fill(); }
+    const [m, mx] = cv(1920, 470);
+    for (let i = 0; i < 7; i++) {  // 浮かぶ岩と、ねじれた木
+      const tx = i * 280 + r() * 60, ty = 120 + r() * 120;
+      mx.fillStyle = '#4a4466'; mx.beginPath(); mx.moveTo(tx - 40, ty); mx.lineTo(tx + 40, ty); mx.lineTo(tx + 10, ty + 50); mx.fill();
+      mx.fillStyle = '#6fa06a'; mx.fillRect(tx - 40, ty - 6, 80, 8);
+    }
+    for (let i = 0; i < 8; i++) {
+      const tx = i * 250 + 60 + r() * 40;
+      mx.fillStyle = '#2f2840'; mx.fillRect(tx, 300, 12, 170);
+      mx.fillStyle = 'rgba(90,140,110,.85)';
+      for (let k = 0; k < 14; k++) { mx.beginPath(); mx.arc(tx + 6 + (r() - 0.5) * 100, 290 + (r() - 0.5) * 60, 12 + r() * 12, 0, 7); mx.fill(); }
+    }
+    const floor = floorTile([['#0e0818', 0, 72]], x => { x.fillStyle = 'rgba(120,80,200,.18)'; for (let i = 0; i < 40; i++) x.fillRect(rng(9)() * 1920, 20 + (i % 5) * 10, 3, 3); });
+    return { sky: s, layers: [{ img: far, f: 0.15, y: 60 }, { img: m, f: 0.45, y: 0 }], floor, ambient: 'mote' };
+  }
+
   function floorTile(bands, extra) {
     const [c, x] = cv(1920, VIEW_H - GROUND_Y);
     bands.forEach(([col, y0, y1]) => R(x, col, 0, y0, 1920, y1 - y0));
@@ -225,7 +254,7 @@ const Backgrounds = (() => {
   const cache = {};
   function get(name) {
     if (!cache[name]) cache[name] = ({
-      street, schoolyard, corridor, homeec, town,
+      street, schoolyard, corridor, homeec, town, grassland,
       rooftop: () => rooftop(false), rooftop_calm: () => rooftop(true),
     })[name]();
     return cache[name];

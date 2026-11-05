@@ -53,10 +53,23 @@ class Player {
     this.inv = 0; this.atk = null; this.hurtT = 0; this.locked = false; this.faceTimer = 0; this.faceOverride = null;
     this.minHp = 0;
     this.guarding = false; this.dodgeT = 0; this.dodgeCD = 0; this.ghosts = []; this.jumps = 0; this.airDodged = false;
+    // 本編のダンジョン：装備とステータスから組み立てる（プロローグは今まで通り）
+    if (world.ch.dungeon) {
+      const st = Stats.calc(save), run = world.game.run || {};
+      this.stats = st; this.maxHp = st.maxHp;
+      this.hp = run.hp != null ? Math.min(this.maxHp, run.hp) : this.maxHp;
+      this.mp = run.mp != null ? run.mp : 10;
+      this.wItems = save.equip.weapons.filter(u => u != null && Inv.byUid(save, u)).map(u => Stats.weapon(save, u));
+      this.weapons = this.wItems.map(w => w.type); this.wIdx = 0; this.canFight = true; this.fire = false;
+    }
   }
+  get item() { return this.wItems ? this.wItems[this.wIdx] || null : null; }   // 今持っている武器の装備データ
+  spCost() { return Math.max(5, SPECIAL.mp - (this.item ? this.item.spcost : 0)); }
   get weapon() { return this.weapons.length ? this.weapons[this.wIdx] : null; }
-  weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return w ? (WEIGHT_SPEED[w.size] || 1) : 1; }
-  get element() { if (this.fire) return 'fire'; const w = this.atk ? WEAPONS[this.atk.key] : (this.weapon && WEAPONS[this.weapon]); return (w && w.element) || 'none'; }
+  weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return (w ? (WEIGHT_SPEED[w.size] || 1) : 1) * (this.stats ? 1 + this.stats.move / 100 : 1); }
+  get element() {
+    if (this.fire) return 'fire';
+    if (this.wItems) return this.atk && this.atk.key === 'kick' ? 'none' : ((this.item && this.item.element) || 'none'); const w = this.atk ? WEAPONS[this.atk.key] : (this.weapon && WEAPONS[this.weapon]); return (w && w.element) || 'none'; }
   setFace(f, t = 1.2) { this.faceOverride = f; this.faceTimer = t; }
   get portrait() {
     if (this.faceTimer > 0 && this.faceOverride) return this.faceOverride;
@@ -126,7 +139,7 @@ class Player {
         if (I.hit('attack') || (a.special && a.frame >= def.cancelAt - 1)) a.queued = true;
         if (I.hit('kick') && a.key !== 'kick' && a.frame >= def.cancelAt) { this.startAttack('kick'); return this.physics(dt); }
       }
-      a.ft += dt * 1000;
+      a.ft += dt * 1000 * (this.item && a.key !== 'kick' ? 1 + this.item.aspd / 100 : 1);   // 攻撃速度の付与効果
       if (a.ft >= def.frameMs[a.frame]) {
         a.ft = 0; a.frame++;
         if (a.frame >= def.frameMs.length) {
@@ -163,11 +176,11 @@ class Player {
       }
       if (I.hit('swap') && this.weapons.length > 1) {
         this.wIdx = (this.wIdx + 1) % this.weapons.length; Audio2.sfx('select');
-        W.floatText(this.x, this.y - 140, WEAPONS[this.weapon].name, '#e9dcff', 14);
+        W.floatText(this.x, this.y - 140, this.item ? this.item.name : WEAPONS[this.weapon].name, this.item ? this.item.rarity.color : '#e9dcff', 14);
       }
       if (this.canFight) {
         if (I.hit('special') && !guardHeld) {
-          if (W.partnerOn && this.mp >= SPECIAL.mp) { this.mp -= SPECIAL.mp; W.doSpecial(this); return this.physics(dt); }
+          if (W.partnerOn && this.mp >= this.spCost()) { this.mp -= this.spCost(); W.doSpecial(this); return this.physics(dt); }
           else if (W.partnerOn) W.floatText(this.x, this.y - 140, 'MPが足りない', '#9bb6ff', 13);
         }
         if (I.hit('attack') && !guardHeld) { this.startAttack(this.weapon || 'kick'); return this.physics(dt); }
@@ -237,6 +250,7 @@ class Player {
   }
   hurt(dmg, fromX) {
     if (this.inv > 0 || this.w.state !== 'play') return false;
+    if (this.stats && this.stats.def) dmg = Math.max(1, Math.round(dmg * 100 / (100 + this.stats.def)));   // 防御
     // ガード：正面からの攻撃はダメージ30%・ノックバックなし
     if (this.guarding && (fromX - this.x) * this.face > 0) {
       const d = Math.max(1, Math.round(dmg * 0.3));
@@ -382,17 +396,21 @@ class Enemy {
       if (this.burnTick <= 0) { this.burnTick = 0.35; this.damage(this.boss ? 4 : 3, null, true); W.spark(this.x + rand(-15, 15), this.y - d.h * 0.6, '#ff9a3a', 3); }
     }
     const dir = Math.sign(P.x - this.x) || 1, dist = Math.abs(P.x - this.x);
+    // 置かれた敵は、主人公が近づくまで眠っている（ダンジョン）
+    const asleep = this.awake === false && dist > 620; if (!asleep) this.awake = true;
     if (this.stun > 0) {
       this.stun -= dt;
       this.vx *= Math.pow(0.02, dt);
       if (d.fly && !this.launched) this.vy *= Math.pow(0.02, dt);
-    } else if (W.state === 'play' && !W.dialogue) {
+    } else if (W.state === 'play' && !W.dialogue && !asleep) {
       this.face = dir;
       AI[d.ai](this, dt, dir, dist, P, W);
     }
     // physics
     const grav = (d.fly && !this.launched) ? 0 : 1900;
     const T = W.terrain, prevX = this.x, prevY = this.y;
+    // 足場の端から落ちないように止まる（飛ばされた時は落ちる）
+    if (!d.fly && this.onGround && !this.launched && this.vx && this.vy >= 0) { const g = T.groundBelow(this.x + Math.sign(this.vx) * (d.w / 2 + 6), this.y - 2, 0); if (g > this.y + 40) this.vx = 0; }
     this.vy += grav * dt; this.x += this.vx * dt; this.y += this.vy * dt;
     if (!d.fly) this.x = T.blockX(this.x, prevX, this.y - d.h, this.y - 4, d.w / 2);
     const gnd = T.groundBelow(this.x, prevY, 0);
@@ -407,7 +425,7 @@ class Enemy {
     if (this.spawnT <= 0) this.x = clamp(this.x, lo + 40, hi - 40);
     // 接触ダメージ
     const contact = this.contactDmg !== undefined ? this.contactDmg : d.dmg;
-    if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(contact, this.x);
+    if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(Math.round(contact * (this.dmgMul || 1)), this.x);
   }
   damage(n, srcX, quiet) {
     if (this.dying > 0) return;

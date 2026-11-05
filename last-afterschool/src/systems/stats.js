@@ -9,8 +9,13 @@ const Stats = {
     const it = uid != null ? Inv.byUid(s, uid) : null;
     if (!it) return null;
     const b = Inv.base(it), r = Inv.rarity(it);
-    const out = { uid, type: b.type, name: Inv.name(it), rarity: r, powerMul: (b.atk / WEAPON_TYPE_REF[b.type]) * r.mul, crit: b.crit || 0, element: null };
-    for (const a of it.affixes) { const d = AFFIX_BY_ID[a.k]; if (d && d.element) out.element = d.element; }
+    const out = { uid, type: b.type, name: Inv.name(it), rarity: r, powerMul: (b.atk / WEAPON_TYPE_REF[b.type]) * r.mul, crit: b.crit || 0, element: null,
+      atkPct: 0, aspd: 0, steal: 0, spcost: 0 };   // この武器を持っている時だけ効く付与効果
+    for (const a of it.affixes) {
+      const d = AFFIX_BY_ID[a.k]; if (!d) continue;
+      if (d.element) out.element = d.element;
+      else if (a.k === 'atk') out.atkPct += a.v; else if (a.k in out) out[a.k] += a.v;
+    }
     return out;
   },
   calc(s) {
