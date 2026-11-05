@@ -477,50 +477,52 @@ const AI = {
   golem(e, dt, dir, dist, P, W) {
     const rage = e.hp < e.maxHp * 0.5;
     if (rage && !e.rage) { e.rage = true; W.floatText(e.x, e.y - 220, '激昂！', '#ff6a6a', 26); Audio2.sfx('warn'); W.shake = 12; }
-    const sp = rage ? 1.35 : 1;
-    e.st -= dt * sp; e.contactDmg = 8; e.liftY = 0;
+    // 弱体化：激昂時の加速を控えめに（1.35→1.15）、歩きの接触ダメージ 8→5
+    const sp = rage ? 1.15 : 1;
+    e.st -= dt * sp; e.contactDmg = 5; e.liftY = 0;
     switch (e.state) {
       case 'move':
         e.vx = dist > 150 ? dir * e.d.speed * sp : 0;
         e.cool -= dt * sp;
         if (e.cool <= 0) {
           const r = Math.random();
-          if (dist < 260) { e.state = 'tele'; e.next = 'slam'; e.st = 0.85; }
-          else if (r < 0.55) { e.state = 'tele'; e.next = 'charge'; e.st = 0.75; e.dir = dir; }
-          else { e.state = 'tele'; e.next = 'rocks'; e.st = 0.55; }
+          // 予備動作を長めにして見てから避けられるように
+          if (dist < 260) { e.state = 'tele'; e.next = 'slam'; e.st = 1.1; }
+          else if (r < 0.5) { e.state = 'tele'; e.next = 'charge'; e.st = 1.0; e.dir = dir; }
+          else { e.state = 'tele'; e.next = 'rocks'; e.st = 0.8; }
           e.vx = 0; Audio2.sfx('warn');
         }
         break;
       case 'tele':
-        e.vx = 0; e.liftY = e.next === 'slam' ? -Math.min(30, (0.85 - e.st) * 50) : 0;
+        e.vx = 0; e.liftY = e.next === 'slam' ? -Math.min(30, (1.1 - e.st) * 40) : 0;
         if (e.next === 'charge') e.face = e.dir;
         if (e.st <= 0) {
           if (e.next === 'slam') {
-            e.state = 'recover'; e.st = 1.0; W.shake = 18; Audio2.sfx('slam'); W.dust(e.x - 80, GROUND_Y, 10); W.dust(e.x + 80, GROUND_Y, 10);
+            e.state = 'recover'; e.st = 1.4; W.shake = 18; Audio2.sfx('slam'); W.dust(e.x - 80, GROUND_Y, 10); W.dust(e.x + 80, GROUND_Y, 10);
             W.addProj(new Shockwave(W, e.x, 1)); W.addProj(new Shockwave(W, e.x, -1));
-            if (rage) setTimeout(() => { if (!e.dead && e.dying <= 0) { W.addProj(new Shockwave(W, e.x, 1)); W.addProj(new Shockwave(W, e.x, -1)); W.shake = 10; Audio2.sfx('slam'); } }, 450);
-            if (Math.abs(P.x - e.x) < 190 && P.onGround) P.hurt(e.d.dmg, e.x);
+            if (rage) setTimeout(() => { if (!e.dead && e.dying <= 0) { W.addProj(new Shockwave(W, e.x, 1)); W.addProj(new Shockwave(W, e.x, -1)); W.shake = 10; Audio2.sfx('slam'); } }, 650);
+            if (Math.abs(P.x - e.x) < 170 && P.onGround) P.hurt(e.d.dmg, e.x);
           } else if (e.next === 'charge') { e.state = 'charge'; e.st = 1.3; }
           else {
-            e.state = 'recover'; e.st = 0.8;
-            const n = rage ? 5 : 3;
+            e.state = 'recover'; e.st = 1.1;
+            const n = rage ? 3 : 2;
             for (let i = 0; i < n; i++) W.addProj(new Rock(W, e.x, e.y - 160, P.x + (i - (n - 1) / 2) * 90));
           }
         }
         break;
       case 'charge': {
-        e.vx = e.dir * 560 * sp; e.contactDmg = 18;
+        e.vx = e.dir * 480 * sp; e.contactDmg = 13;
         if (Math.random() < 0.4) W.dust(e.x - e.dir * 60, GROUND_Y, 1);
         const lo = W.camLock ? W.camLock.min + 110 : 110, hi = W.camLock ? W.camLock.max + VIEW_W - 110 : W.ch.length - 110;
         if ((e.dir > 0 && e.x >= hi) || (e.dir < 0 && e.x <= lo)) {
-          e.x = clamp(e.x, lo, hi); e.vx = 0; e.state = 'dizzy'; e.st = 1.6; W.shake = 16; Audio2.sfx('slam');
-          for (let i = 0; i < 4; i++) W.addProj(new Rock(W, e.x + rand(-200, 200), -40, e.x + rand(-350, 350)));
+          e.x = clamp(e.x, lo, hi); e.vx = 0; e.state = 'dizzy'; e.st = 2.2; W.shake = 16; Audio2.sfx('slam');
+          for (let i = 0; i < 2; i++) W.addProj(new Rock(W, e.x + rand(-200, 200), -40, e.x + rand(-350, 350)));
         } else if (e.st <= 0) { e.state = 'recover'; e.st = 0.6; e.vx = 0; }
         break;
       }
       case 'dizzy': case 'recover': case 'stagger':
         e.vx *= Math.pow(0.01, dt); e.contactDmg = 0;
-        if (e.st <= 0) { e.state = 'move'; e.cool = rand(0.8, 1.6) / sp; }
+        if (e.st <= 0) { e.state = 'move'; e.cool = rand(1.8, 2.8) / sp; } // 攻撃の間隔 0.8〜1.6秒 → 1.8〜2.8秒
         break;
     }
   },
@@ -541,7 +543,7 @@ class Spore {
 class Shockwave {
   constructor(w, x, dir) { this.w = w; this.x = x; this.dir = dir; this.t = 0; this.dead = false; this.hitDone = false; }
   update(dt) { this.t += dt; this.x += this.dir * 430 * dt; if (this.t > 1.8) this.dead = true;
-    const P = this.w.player; if (!this.hitDone && overlap([this.x - 22, GROUND_Y - 46, this.x + 22, GROUND_Y], P.box())) { if (P.hurt(14, this.x - this.dir * 50)) this.hitDone = true; }
+    const P = this.w.player; if (!this.hitDone && overlap([this.x - 22, GROUND_Y - 46, this.x + 22, GROUND_Y], P.box())) { if (P.hurt(10, this.x - this.dir * 50)) this.hitDone = true; }
     if (Math.random() < 0.5) this.w.dust(this.x, GROUND_Y, 1); }
   draw(ctx, cam) { const x = this.x - cam; ctx.save(); ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = 'rgba(200,150,255,.6)'; ctx.beginPath(); ctx.moveTo(x - 26, GROUND_Y); ctx.lineTo(x, GROUND_Y - 50 - Math.sin(this.t * 30) * 6); ctx.lineTo(x + 26, GROUND_Y); ctx.fill();
@@ -551,7 +553,7 @@ class Rock {
   constructor(w, x, y, tx) { this.w = w; this.x = x; this.y = y; const T = 1.0; this.vx = (tx - x) / T; this.vy = -500; this.g = (2 * (GROUND_Y - y - this.vy * T)) / (T * T); this.dead = false; this.r = rand(12, 18); this.rot = 0; }
   update(dt) { this.vy += this.g * dt; this.x += this.vx * dt; this.y += this.vy * dt; this.rot += dt * 8;
     const P = this.w.player;
-    if (overlap([this.x - this.r, this.y - this.r, this.x + this.r, this.y + this.r], P.box())) { P.hurt(10, this.x); this.dead = true; this.w.dust(this.x, this.y, 5); }
+    if (overlap([this.x - this.r, this.y - this.r, this.x + this.r, this.y + this.r], P.box())) { P.hurt(8, this.x); this.dead = true; this.w.dust(this.x, this.y, 5); }
     if (this.y >= GROUND_Y - 4) { this.dead = true; this.w.dust(this.x, GROUND_Y, 6); Audio2.sfx('kick'); } }
   draw(ctx, cam) { ctx.save(); ctx.translate(this.x - cam, this.y); ctx.rotate(this.rot);
     ctx.fillStyle = '#7d7488'; ctx.fillRect(-this.r, -this.r, this.r * 2, this.r * 2);

@@ -98,7 +98,7 @@ class World {
   startBoss(ev) {
     this.camLock = { min: 0, max: this.ch.length - VIEW_W };
     const b = new Enemy(this, ev.enemy, this.ch.length - 260, GROUND_Y);
-    b.cool = 1.5; this.enemies.push(b); this.boss = b;
+    b.cool = 2.5; this.enemies.push(b); this.boss = b;
     this.bossIntro = 2.2; Audio2.sfx('warn'); this.shake = 10;
     this.wave = { ev, idx: 99, delay: 0, t: 0, boss: true };
   }
@@ -144,12 +144,15 @@ class World {
     const box = P.face > 0 ? [P.x + b[0], P.y + b[1], P.x + b[2], P.y + b[3]] : [P.x - b[2], P.y + b[1], P.x - b[0], P.y + b[3]];
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2, r = Math.max(40, (box[2] - box[0]) * 0.45);
     if (el !== 'none' && atk.key !== 'kick') this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
-    // 必殺中は、その技の最後の一撃で爆発エフェクトを出す（机以外でも派手に）
-    if (h.burst || (atk.special && h === def.hits[def.hits.length - 1])) {
+    // 紫の爆発エフェクトは必殺専用（その技の最後の一撃で出す）
+    if (atk.special && h === def.hits[def.hits.length - 1]) {
       this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el)); this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);
       Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 14);
       if (el === 'fire') for (let i = 0; i < 24; i++) this.spark(P.x + P.face * rand(20, 220), GROUND_Y - rand(0, 30), '#ff9a3a', 1, -rand(100, 400));
       if (el === 'sand') this.dust(P.x + P.face * 120, GROUND_Y, 20, '#d9c08c');
+    }
+    else if (h.slam) { // 通常の机の叩きつけ：揺れ・音・砂ぼこりだけ
+      this.shake = Math.max(this.shake, h.shake || 10); Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 10);
     }
     let any = false;
     const lvMul = 1 + (P.lv - 1) * 0.08, spMul = atk.special ? SPECIAL.dmgMul : 1;

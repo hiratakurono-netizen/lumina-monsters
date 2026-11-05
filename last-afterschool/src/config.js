@@ -67,7 +67,7 @@ const WEAPONS = {
     name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk',
     frameMs: [110, 100, 90, 90, 220, 140],
     arc: [0, -60, -40, -20, 90, 0],
-    hits: [{ frame: 4, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
+    hits: [{ frame: 4, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, slam: true }],
     step: [0, 0, 20, 30, 60, 0], cancelAt: 5, next: 'desk2',
   },
   // 机の2段目：振りモーションの後半を速く再生して、もう一度叩きつける
@@ -102,7 +102,7 @@ const ENEMIES = {
   shroom:  { spr: 'shroom', scale: 0.62, hp: 52, dmg: 9, speed: 45, ai: 'spore', w: 56, h: 56, exp: 9 },
   imp:     { spr: 'imp_s', scale: 0.72, hp: 36, dmg: 10, speed: 120, ai: 'lunge', w: 46, h: 50, exp: 8 },
   ghost:   { spr: 'ghost', scale: 0.6, hp: 46, dmg: 9, speed: 70, ai: 'ghost', w: 56, h: 60, exp: 10, fly: true, weak: 'fire' },
-  golem:   { spr: 'golem', scale: 1.15, hp: 1500, dmg: 16, speed: 70, ai: 'golem', w: 170, h: 185, exp: 120, boss: true,
+  golem:   { spr: 'golem', scale: 1.15, hp: 1300, dmg: 12, speed: 70, ai: 'golem', w: 170, h: 185, exp: 120, boss: true,
              name: '瓦礫の番人 ガレキゴーレム' },
 };
 
