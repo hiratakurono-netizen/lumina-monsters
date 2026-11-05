@@ -146,7 +146,7 @@ const Town = {
       const r = Inv.rarity(it), b = Inv.base(it);
       const basic = b.kind === 'weapon' ? `威力 ${b.atk}（${r.name}）` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ') || r.name;
       return h('div', { class: 'ui-row', style: { '--rc': r.color } }, [
-        h('div', { class: 'main' }, [h('div', { class: 'name' }, Inv.name(it) + (Inv.isEquipped(s, it.uid) ? '　［装備中］' : '')),
+        h('div', { class: 'main' }, [h('div', { class: 'name' }, [Inv.name(it) + (Inv.isEquipped(s, it.uid) ? '　［装備中］' : ''), it.isNew ? h('span', { class: 'ui-new' }, 'NEW') : null]),
           h('div', { class: 'sub' }, [basic, ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join(''))]),
         ...extra]);
     };
@@ -183,6 +183,8 @@ const Town = {
       el.append(h('div', { class: 'ui-h' }, `装備品（${s.bag.length} / ${BAG_MAX}）`));
       const order = { weapon: 0, armor: 1, accessory: 2 };
       [...s.bag].sort((a, b) => order[Inv.slotOf(a)] - order[Inv.slotOf(b)] || Inv.rarity(b).tier - Inv.rarity(a).tier).forEach(it => el.append(itemRow(it)));
+      // 一覧で見たので「NEW」を外す（表示は次に開いた時から消える）
+      if (s.bag.some(it => it.isNew)) { s.bag.forEach(it => { delete it.isNew; }); this.save(game); }
       el.append(h('div', { class: 'ui-h' }, '消耗品'));
       const ids = Object.keys(CONSUMABLES).filter(id => Inv.count(s, id));
       if (!ids.length) el.append(h('div', { class: 'ui-note' }, 'なし'));

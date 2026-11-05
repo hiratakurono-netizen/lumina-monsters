@@ -242,7 +242,13 @@ class World {
     this.spark(e.x, e.y - e.d.h / 2, '#e8d8ff', 14);
     const fl = this.ch.dungeon ? this.ch.floor : 1;
     this.player.gainExp(Math.round(e.d.exp * (1 + 0.15 * (fl - 1))));
-    if (this.ch.dungeon) this.dropGold(e.x, e.y - 30, Math.round((3 + fl * 2) * (e.boss ? 15 : 1) * rand(0.7, 1.3)));
+    if (this.ch.dungeon) {
+      this.dropGold(e.x, e.y - 30, Math.round((3 + fl * 2) * (e.boss ? 15 : 1) * rand(0.7, 1.3)));
+      // 装備のドロップ：ボスは確定、通常の敵はまれに
+      const rng = makeRng((Math.random() * 4294967296) >>> 0), save = this.game.save;
+      if (e.boss) { const B = LOOT.BOSS[fl] || { n: 1, minTier: 1 }; for (let i = 0; i < B.n; i++) this.dropItem(e.x + (i - 0.5) * 60, e.y - 60, LOOT.roll(save, rng, fl, B)); }
+      else if (rng.chance(LOOT.ENEMY_ITEM_CHANCE)) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl));
+    }
     if (!e.boss && Math.random() < 0.13) this.pickups.push({ x: e.x, y: e.y - 40, vy: -260, t: 0, kind: 'milk' });
     if (e.boss) {
       this.slowmo = 1.8; this.flash = 1; this.shake = 24; Audio2.sfx('slam');
@@ -273,12 +279,13 @@ class World {
       const gy = this.terrain.groundBelow(p.x, p.y - p.vy * dt + 12, 0) - 12;
       if (p.y > gy) { p.y = gy; p.vy = 0; }
       if (p.y > VIEW_H + 60) p.dead = true;
+      if (p.kind === 'item') { this.touchItem(p, P); continue; }
       if (Math.abs(P.x - p.x) < 30 && Math.abs(P.y - 40 - p.y) < 70) {
         p.dead = true;
         if (p.kind === 'gold') { this.game.addRunGold(p.v); Audio2.sfx('blip'); this.floatText(P.x, P.y - 130, `+${p.v} G`, '#ffe27a', 15); }
         else { P.hp = Math.min(P.maxHp, P.hp + 22); Audio2.sfx('heal'); this.floatText(P.x, P.y - 130, 'いちごミルク +22', '#ffb6d0', 15); }
       }
-      if (p.t > 12) p.dead = true;
+      if (p.t > 12 && p.kind !== 'item') p.dead = true;   // 装備は消えない
     }
     this.pickups = this.pickups.filter(p => !p.dead);
   }
@@ -287,6 +294,19 @@ class World {
   dropGold(x, y, total) {
     const n = Math.min(5, 1 + Math.floor(total / 12));
     for (let i = 0; i < n; i++) this.pickups.push({ kind: 'gold', v: Math.max(1, Math.round(total / n)), x, y, vx: rand(-140, 140), vy: rand(-420, -220), t: 0 });
+  }
+  dropItem(x, y, item) { this.pickups.push({ kind: 'item', item, x, y, vx: rand(-90, 90), vy: -420, t: 0 }); }
+  // 装備を拾う：すぐ持ち物に入れて保存する。持ち物がいっぱいの時は地面に残す
+  touchItem(p, P) {
+    p.cool = Math.max(0, (p.cool || 0) - 1 / 60);
+    if (Math.abs(P.x - p.x) > 34 || Math.abs(P.y - 40 - p.y) > 70 || p.cool > 0) return;
+    const s = this.game.save, r = Inv.rarity(p.item);
+    if (Inv.add(s, p.item)) {
+      p.dead = true; Save.store(s);
+      Audio2.sfx(r.tier >= 2 ? 'lvup' : 'pickup');
+      this.floatText(P.x, P.y - 150, Inv.name(p.item), r.color, r.tier >= 2 ? 20 : 16);
+      if (r.tier >= 2) { this.flash = 0.2; this.spark(p.x, p.y, r.color, 16); }
+    } else { p.cool = 2; this.floatText(P.x, P.y - 150, '持ち物がいっぱい（自宅で整理）', '#ff9a9a', 14); }
   }
   updateDungeon(dt) {
     const P = this.player;
@@ -297,6 +317,10 @@ class World {
         // 宝箱を開ける。中身は今はゴールドだけ（装備のドロップは次の段階で追加：仮）
         c.opened = true; Audio2.sfx('pickup'); this.flash = 0.25;
         this.dropGold(c.x, c.y - 30, Math.round((15 + c.floor * 8) * (c.hidden ? 3 : 1) * rand(0.8, 1.2)));
+        // 宝箱の装備：隠し宝箱は必ず入っていて、レアリティも出やすい（2階ぶん深い扱い・アンコモン以上）
+        const rng = makeRng((Math.random() * 4294967296) >>> 0), save = this.game.save;
+        if (c.hidden) this.dropItem(c.x, c.y - 40, LOOT.roll(save, rng, c.floor + 2, { minTier: 1 }));
+        else if (rng.chance(LOOT.CHEST_ITEM_CHANCE)) this.dropItem(c.x, c.y - 40, LOOT.roll(save, rng, c.floor));
         this.floatText(c.x, c.y - 70, c.hidden ? '隠し宝箱！' : '宝箱', '#ffe27a', 16);
       }
     }
@@ -306,6 +330,15 @@ class World {
       this.exitUsed = true; Audio2.sfx('transform'); this.flash = 0.5;
       this.game.floorCleared(this);
     }
+  }
+  // 落ちている装備：レアリティの色で光る。レア以上は光の柱
+  drawLoot(ctx, p, cam) {
+    const r = Inv.rarity(p.item), b = Inv.base(p.item), x = p.x - cam, y = p.y + Math.sin(p.t * 3) * 3;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    if (r.tier >= 2) { const g = ctx.createLinearGradient(0, y - 220, 0, y); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, r.color); ctx.globalAlpha = 0.35 + Math.sin(p.t * 4) * 0.1; ctx.fillStyle = g; ctx.fillRect(x - 6, y - 220, 12, 220); }
+    ctx.globalAlpha = 0.55; const g2 = ctx.createRadialGradient(x, y, 2, x, y, 30); g2.addColorStop(0, r.color); g2.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g2; ctx.fillRect(x - 30, y - 30, 60, 60);
+    ctx.restore();
+    Icons.draw(ctx, b.kind === 'weapon' ? b.type : b.kind === 'armor' ? 'armor' : 'acc', x, y, 1.6);
   }
   drawDungeon(ctx, cam) {
     for (const c of this.chests) {
@@ -378,7 +411,10 @@ class World {
       ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 3;
       const lab = ITEMS[it.ev.item].label; ctx.strokeText(lab, x, y - 48); ctx.fillText(lab, x, y - 48); ctx.textAlign = 'left';
     }
-    for (const p of this.pickups) Icons.draw(ctx, p.kind === 'gold' ? 'gold' : 'milk', p.x - cam, p.y, 2, p.t > 9 && Math.floor(p.t * 8) % 2);
+    for (const p of this.pickups) {
+      if (p.kind === 'item') { this.drawLoot(ctx, p, cam); continue; }
+      Icons.draw(ctx, p.kind === 'gold' ? 'gold' : 'milk', p.x - cam, p.y, 2, p.t > 9 && Math.floor(p.t * 8) % 2);
+    }
     if (this.ch.dungeon) this.drawDungeon(ctx, cam);
   }
   drawProps(ctx, cam) {
@@ -401,6 +437,8 @@ const Icons = {
       case 'stove': R('#5f6470', -14, -6, 28, 14); R('#2a2d35', -12, -8, 10, 2); R('#2a2d35', 2, -8, 10, 2);
         ctx.fillStyle = '#6ab4ff'; for (let i = 0; i < 3; i++) R('#6ab4ff', -11 + i * 3, -12 - (i % 2) * 2, 2, 4); for (let i = 0; i < 3; i++) R('#9fd0ff', 3 + i * 3, -12 - ((i + 1) % 2) * 2, 2, 4);
         R('#e6e6ea', -10, 2, 4, 3); R('#e6e6ea', 6, 2, 4, 3); break;
+      case 'armor': R('#e8e4f0', -8, -8, 16, 14); R('#e8e4f0', -12, -8, 4, 7); R('#e8e4f0', 8, -8, 4, 7); R('#2a2540', -2, -8, 4, 4); R('#b03050', -2, -4, 4, 2); break;
+      case 'acc': ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.stroke(); R('#9fe0ff', -2, -9, 4, 4); break;
       case 'gold': R('#b8860b', -5, -5, 10, 10); R('#ffd36a', -4, -4, 8, 8); R('#fff3b0', -2, -3, 2, 4); break;
       case 'milk': R('#fff', -5, -8, 10, 14); R('#ff9ec0', -5, -2, 10, 8); R('#fff', -5, -11, 10, 3); R('#e07aa0', -2, 0, 4, 3); break;
       case 'kick': R('#e8e4f0', -6, -2, 12, 5); R('#3a3550', -6, 3, 12, 2); R('#2a2540', -3, -10, 5, 8); break;
