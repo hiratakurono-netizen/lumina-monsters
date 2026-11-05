@@ -64,22 +64,22 @@ const WEAPONS = {
   },
   desk: {
     name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk',
-    frameMs: [110, 100, 90, 90, 90, 180, 140, 130],
-    arc: [0, -60, -40, -20, 60, 90, 90, 0],
-    hits: [{ frame: 5, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
-    step: [0, 0, 20, 30, 60, 0, 0, 0], cancelAt: 6, next: 'desk2',
+    frameMs: [110, 100, 90, 90, 220, 140],
+    arc: [0, -60, -40, -20, 90, 0],
+    hits: [{ frame: 4, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
+    step: [0, 0, 20, 30, 60, 0], cancelAt: 5, next: 'desk2',
   },
   // 机の2段目：振りモーションの後半を速く再生して、もう一度叩きつける
   desk2: {
     name: '追い打ち', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk', hidden: true,
-    frameMap: [3, 4, 5, 6],
-    frameMs: [70, 70, 200, 120],
-    arc: [-20, 60, 90, 90],
+    frameMap: [2, 3, 4],
+    frameMs: [70, 70, 220],
+    arc: [-40, -20, 90],
     hits: [
       { frame: 1, dmg: 22, box: [-30, -170, 180, 5], kb: 300, stop: 70, shake: 6 },
       { frame: 2, dmg: 34, box: [-20, -170, 200, 10], kb: 480, launch: 300, stop: 110, shake: 10 },
     ],
-    step: [30, 40, 0, 0], cancelAt: 3,
+    step: [30, 40, 0], cancelAt: 2,
   },
 };
 // 必殺「フルスイング」：どの武器でも相棒が巨大化させて叩きつける

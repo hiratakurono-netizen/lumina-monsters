@@ -26,6 +26,12 @@ SHEETS = {  # anim name: (sheet file, expected frame count)
     'chair': ('hero_chair.jpg', 8),
     'desk': ('hero_desk.jpg', 8),
 }
+# 武器のシートは主人公が小さめに描かれているので、頭頂〜胸のリボンの長さ（待機・歩き・走り・蹴りで約106px）
+# がそろうように拡大する。机はリボンが隠れるので、机を持って直立したコマの身長で合わせた値。
+SIZE_FIX = {'bat': 1.06, 'chair': 1.17, 'desk': 1.05}
+# 元の素材で机が縦にまっすぐ切れているコマ（机の5・6コマ目）は使わない
+DROP = {'desk': (5, 6)}
+SMART_SPLIT = ('hero_kick.jpg',)
 TARGET_FIG_H = 300   # idle figure height in the saved sprite (= 150 world px at scale 0.5)
 WORLD_SCALE = 0.5
 WEAPON_ANIMS = ('bat', 'chair', 'desk')
@@ -70,6 +76,40 @@ def label_blocks(fg, block=4, grow=1):
     return pad, sizes
 
 
+def split_two(m, max_it=12):
+    """Erode until the mask falls apart into two big cores, then give every pixel to the core it reaches first."""
+    def ero(a):
+        o = a.copy(); o[1:] &= a[:-1]; o[:-1] &= a[1:]; o[:, 1:] &= a[:, :-1]; o[:, :-1] &= a[:, 1:]; return o
+    core = m.copy()
+    for _ in range(max_it):
+        core = ero(core)
+        lab = np.zeros(core.shape, int); n = 0; sizes = []
+        for y, x in zip(*np.nonzero(core)):
+            if lab[y, x]: continue
+            n += 1; q = deque([(y, x)]); lab[y, x] = n; cnt = 0
+            while q:
+                cy, cx = q.popleft(); cnt += 1
+                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ny, nx = cy + dy, cx + dx
+                    if 0 <= ny < core.shape[0] and 0 <= nx < core.shape[1] and core[ny, nx] and not lab[ny, nx]:
+                        lab[ny, nx] = n; q.append((ny, nx))
+            sizes.append(cnt)
+        big = [i + 1 for i, k in enumerate(sizes) if k > 0.15 * m.sum() / 2]
+        if len(big) >= 2:
+            big = sorted(big, key=lambda L: -sizes[L - 1])[:2]
+            own = np.zeros(m.shape, int); q = deque()
+            for k, L in enumerate(big, 1):
+                for y, x in zip(*np.nonzero(lab == L)): own[y, x] = k; q.append((y, x))
+            while q:  # grow both cores at the same speed through the original mask
+                cy, cx = q.popleft()
+                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ny, nx = cy + dy, cx + dx
+                    if 0 <= ny < m.shape[0] and 0 <= nx < m.shape[1] and m[ny, nx] and not own[ny, nx]:
+                        own[ny, nx] = own[cy, cx]; q.append((ny, nx))
+            return [own == 1, own == 2]
+    return None
+
+
 def figures(path, expect):
     rgb = np.asarray(Image.open(os.path.join(SRC, path)).convert('RGB'))
     rgba, fg = key_green(rgb)
@@ -95,24 +135,37 @@ def figures(path, expect):
     has_art = path in ('hero_idle.jpg', 'hero_walk.jpg')
     art = [c for c in big if has_art and c['x0'] < 300]
     frames = [c for c in big if not (has_art and c['x0'] < 300)]
-    # 隣のコマと触れて1つになった塊は、縦に一番細い列で2つに切る
+    # 隣のコマと触れて1つになった塊は、細い接点を削って2つの芯に分け、
+    # それぞれの芯から元の形へ広げ直す（伸ばした足の靴などが隣のコマに取られない）
     while len(frames) < expect:
         c = max(frames, key=lambda c: c['n'])
-        sel = np.isin(lab, c['L']) & fg
-        cols = sel[:, c['x0']:c['x1']].sum(axis=0)
-        w = c['x1'] - c['x0']; lo, hi = int(w * 0.3), int(w * 0.7)
-        cut = c['x0'] + lo + int(np.argmin(cols[lo:hi]))
-        left = dict(c, x1=cut, n=c['n'] // 2, clip=(c['x0'], cut))
-        right = dict(c, x0=cut, n=c['n'] // 2, clip=(cut, c['x1']))
-        frames.remove(c); frames += [left, right]
+        sel = c['mask'] if 'mask' in c else (np.isin(lab, c['L']) & fg)
+        sub = sel[c['y0']:c['y1'], c['x0']:c['x1']]
+        # 細い接点（蹴りの足先）で触れているシートだけ芯から分ける。机・椅子のように太く重なるものは縦切り
+        parts = split_two(sub) if path in SMART_SPLIT else None
+        if parts is not None:  # 左右の2人にきちんと分かれたか確かめる
+            w = sub.shape[1]
+            cx = [np.nonzero(m)[1].mean() for m in parts]
+            share = [m.sum() / sub.sum() for m in parts]
+            if abs(cx[0] - cx[1]) < 0.3 * w or min(share) < 0.3: parts = None
+        if parts is None:  # 接点が太くて分かれない時は、縦に一番細い列で切る
+            cols = sub.sum(axis=0); w = sub.shape[1]; lo, hi = int(w * 0.3), int(w * 0.7)
+            cut = lo + int(np.argmin(cols[lo:hi]))
+            left = sub.copy(); left[:, cut:] = False
+            right = sub.copy(); right[:, :cut] = False
+            parts = [left, right]
+        frames.remove(c)
+        for m in parts:
+            full = np.zeros_like(sel); full[c['y0']:c['y1'], c['x0']:c['x1']] = m
+            ys, xs = np.nonzero(full)
+            # n はブロック（2x2）単位でそろえる（画素数のままだと切った塊が最大に見えて切り直される）
+            frames.append(dict(c, n=int(m.sum()) // 4, mask=full, y0=ys.min(), y1=ys.max() + 1, x0=xs.min(), x1=xs.max() + 1))
     frames.sort(key=lambda c: (0 if (c['y0'] + c['y1']) / 2 < 512 else 1, c['x0']))
     if len(frames) != expect:
         raise SystemExit(f'{path}: found {len(frames)} figures, expected {expect}: {[(int(c["x0"]), int(c["y0"]), c["n"]) for c in frames]}')
     def cut(cs):
-        sel = np.isin(lab, [L for c in cs for L in c['L']]) & fg
-        for c in cs:
-            if 'clip' in c:
-                keep = np.zeros_like(sel); keep[:, c['clip'][0]:c['clip'][1]] = True; sel &= keep
+        sel = np.zeros_like(fg)
+        for c in cs: sel |= c['mask'] if 'mask' in c else (np.isin(lab, c['L']) & fg)
         y0 = min(c['y0'] for c in cs); y1 = max(c['y1'] for c in cs)
         x0 = min(c['x0'] for c in cs); x1 = max(c['x1'] for c in cs)
         im = rgba.copy(); im[..., 3] = np.where(sel, 255, 0)
@@ -147,6 +200,7 @@ def build(data):
     for anim, (sheet, n) in SHEETS.items():
         f, art = figures(sheet, n)
         if anim in FLIP: f = [im.transpose(Image.FLIP_LEFT_RIGHT) for im in f]
+        f = [im for i, im in enumerate(f) if i not in DROP.get(anim, ())]
         frames[anim] = f
         if anim == 'idle' and art: keyart = art[0]
     scale = TARGET_FIG_H / frames['idle'][0].height
@@ -154,7 +208,7 @@ def build(data):
     for anim in ('idle', 'walk', 'run', 'kick', 'hurt'):
         heroine[anim] = pack(f'hero_{anim}', frames[anim], scale, use_feet=False, head_align=anim in HEAD_ALIGN)
     data['heroine'] = heroine
-    data['swing'] = {k: pack(f'hero_swing_{k}', frames[k], scale, use_feet=True) for k in WEAPON_ANIMS}
+    data['swing'] = {k: pack(f'hero_swing_{k}', frames[k], scale * SIZE_FIX.get(k, 1), use_feet=True) for k in WEAPON_ANIMS}
     data.pop('carry', None)
     if keyart is not None:
         k = keyart.resize((round(keyart.width * 0.6), round(keyart.height * 0.6)), Image.LANCZOS)
