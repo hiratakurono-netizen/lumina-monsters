@@ -57,6 +57,7 @@ class Player {
     // 本編のダンジョン：装備とステータスから組み立てる（プロローグは今まで通り）
     if (world.ch.dungeon) {
       const st = Stats.calc(save), run = world.game.run || {};
+      if (run.power) st.atkPct += 20;   // 力のキャンディ（その潜入の間ずっと）
       this.stats = st; this.maxHp = st.maxHp;
       this.hp = run.hp != null ? Math.min(this.maxHp, run.hp) : this.maxHp;
       this.mp = run.mp != null ? run.mp : 10;

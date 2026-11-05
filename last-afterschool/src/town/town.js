@@ -218,24 +218,40 @@ const Town = {
   },
 
   // ---- コンビニ：買う・売る ----
-  SHOP_STOCK: ['milk', 'bento', 'water', 'cooler', 'bell'],
-  SHOP_EQUIP: ['a_jersey', 'c_hairpin', 'c_ribbon', 'w_bat_pipe', 'w_chair_pipe'],   // 仮の品ぞろえ（進行で増やす予定）
+  // 消耗品の品ぞろえ。need が true の時だけ並ぶ（進行で増える）
+  SHOP_STOCK: [
+    { id: 'milk' },
+    { id: 'bell' },
+    { id: 'bento', need: s => Town.best(s) >= 3 },
+    { id: 'power', need: s => Town.best(s) >= 5 },
+    { id: 'water', need: s => !!(s.dungeons.grassland || {}).cleared },        // 砂漠が開いたら
+    { id: 'cooler', need: s => !!(s.dungeons.snow || {}).cleared },           // 火山が開いたら
+  ],
+  best(s) { return Math.max(1, ...Object.values(s.dungeons || {}).map(d => d.best || 0)); },
+  // 装備の品ぞろえ：魔界から帰るたびに入れ替わる5品。到達した階が深いほど強い物が並ぶ
+  restock(s) {
+    const rng = makeRng((Date.now() ^ (s.uid * 2654435761)) >>> 0), fl = Math.min(10, this.best(s));
+    s.shop = { items: Array.from({ length: 5 }, () => { const it = LOOT.roll(s, rng, fl); delete it.isNew; return it; }) };
+  },
   openShop(game) {
     const s = game.save, h = UI.h;
     const buyTab = el => {
       el.append(h('div', { class: 'ui-h' }, '消耗品'));
-      for (const id of this.SHOP_STOCK) {
+      for (const { id, need } of this.SHOP_STOCK) {
+        if (need && !need(s)) continue;
         const c = CONSUMABLES[id], have = Inv.count(s, id), can = s.gold >= c.price && have < c.max;
         el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${c.name}　${c.price} G`), h('div', { class: 'sub' }, `${c.desc}（所持 ${have} / ${c.max}）`)]),
           h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= c.price; Inv.addItem(s, id, 1); this.save(game); Audio2.sfx('pickup'); UI.render(); } }, '買う')]));
       }
-      el.append(h('div', { class: 'ui-h' }, '装備品'));
-      for (const id of this.SHOP_EQUIP) {
-        const b = ITEM_BASES[id], can = s.gold >= b.price && s.bag.length < BAG_MAX;
-        const desc = b.kind === 'weapon' ? `威力 ${b.atk}` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ');
-        el.append(h('div', { class: 'ui-row', style: { '--rc': RARITY_BY_ID.common.color } }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${b.name}　${b.price} G`), h('div', { class: 'sub' }, desc)]),
-          h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= b.price; Inv.add(s, Inv.make(s, id, 'common')); this.save(game); Audio2.sfx('pickup'); UI.toast(`${b.name}を買いました（自宅で装備できます）`); UI.render(); } }, '買う')]));
-      }
+      if (!s.shop) { this.restock(s); this.save(game); }
+      el.append(h('div', { class: 'ui-h' }, '装備品（魔界から帰るたびに入れ替わります）'));
+      if (!s.shop.items.length) el.append(h('div', { class: 'ui-note' }, '売り切れ。次の入荷をお待ちください。'));
+      s.shop.items.forEach((it, i) => {
+        const b = Inv.base(it), r = Inv.rarity(it), price = Inv.buyPrice(it), can = s.gold >= price && s.bag.length < BAG_MAX;
+        const basic = b.kind === 'weapon' ? `威力 ${b.atk}` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ');
+        el.append(h('div', { class: 'ui-row', style: { '--rc': r.color } }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${Inv.name(it)}　${price} G`), h('div', { class: 'sub' }, [`${r.name}・${basic}`, ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join(''))]),
+          h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= price; s.shop.items.splice(i, 1); it.uid = s.uid++; it.isNew = true; Inv.add(s, it); this.save(game); Audio2.sfx('pickup'); UI.toast(`${b.name}を買いました（自宅で装備できます）`); UI.render(); } }, '買う')]));
+      });
     };
     const sellTab = el => {
       const list = s.bag.filter(it => !Inv.isEquipped(s, it.uid));

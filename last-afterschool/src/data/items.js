@@ -51,6 +51,7 @@ const CONSUMABLES = {
   water:  { name: '水',           desc: '水分を回復（砂漠で必要）',         price: 20,  max: 9 },
   cooler: { name: '冷却材',       desc: '火山の残り時間を30秒のばす',       price: 60,  max: 5 },
   bell:   { name: '帰還の鈴',     desc: 'ダンジョンからいつでも町へ帰る',   price: 80,  max: 3 },
+  power:  { name: '力のキャンディ', desc: 'その潜入の間、攻撃力 +20%（重ねがけ不可）', price: 90, max: 3 },
 };
 
 // 付与効果。v はレアリティの段階が上がるほど上振れしやすい

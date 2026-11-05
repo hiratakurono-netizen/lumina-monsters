@@ -47,7 +47,7 @@ const DungeonFlow = {
   nextFloor() { this.run.floor++; Save.store(this.save); this.transition(() => this.startFloor()); },
 
   returnToTown(lines) {
-    this.run = null; this.save.hp = null; Save.store(this.save);
+    this.run = null; this.save.hp = null; Town.restock(this.save); Save.store(this.save);   // 帰るたびにショップの品ぞろえが変わる
     this.transition(() => { this.enterTown(); if (lines && lines.length) this.world.ch.intro = lines; });
   },
   dungeonFailed(W) {
@@ -65,6 +65,7 @@ const DungeonFlow = {
       const rows = [
         ['milk', `HP +40（今 ${Math.ceil(P.hp)} / ${P.maxHp}）`, use('milk', () => { P.hp = Math.min(P.maxHp, P.hp + 40); W.floatText(P.x, P.y - 130, 'HP +40', '#8fe0a0', 16); })],
         ['bento', 'HPを全回復', use('bento', () => { P.hp = P.maxHp; W.floatText(P.x, P.y - 130, 'HP 全回復', '#8fe0a0', 16); })],
+        ['power', this.run.power ? '使用中（攻撃力 +20%）' : 'この潜入の間、攻撃力 +20%', () => { if (this.run.power || !Inv.useItem(s, 'power')) return; this.run.power = true; P.stats.atkPct += 20; Save.store(s); Audio2.sfx('lvup'); W.floatText(P.x, P.y - 130, '攻撃力 +20%', '#ffb35a', 16); UI.render(); }],
         ['bell', '町へ帰る（ゴールドは失わない）', () => { if (!Inv.useItem(s, 'bell')) return; this.keepHero(W); UI.close(); this.returnToTown([L('sys', '帰還の鈴が鳴り、町へ戻った。')]); }],
       ];
       for (const [id, desc, fn] of rows) {

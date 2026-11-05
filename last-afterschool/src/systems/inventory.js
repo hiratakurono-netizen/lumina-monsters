@@ -48,6 +48,8 @@ const Inv = {
     if (this.isEquipped(s, uid)) return false;
     s.bag = s.bag.filter(i => i.uid !== uid); return true;
   },
+  // ショップでの値段（レアリティと付与効果の数で上がる）
+  buyPrice(it) { return Math.round((this.base(it).price || 40) * this.rarity(it).mul * (1 + it.affixes.length * 0.35) * (1 + this.rarity(it).tier * 0.25)); },
   sellPrice(it) { return Math.max(1, Math.round((this.base(it).price || 20) * 0.3 * this.rarity(it).mul * (1 + it.affixes.length * 0.25))); },
   // 消耗品
   count(s, id) { return s.items[id] || 0; },
