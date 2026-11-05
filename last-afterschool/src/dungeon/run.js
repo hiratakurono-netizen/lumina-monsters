@@ -28,6 +28,15 @@ const DungeonFlow = {
   floorCleared(W) {
     this.keepHero(W);
     const f = this.run.floor, d = this.dg(), name = DUNGEONS[this.run.id].name;
+    if (f === 10 && this.run.id === 'castle') {   // 最終ダンジョン：魔王を倒した（エンディングは今後のストーリーで作る：仮）
+      d.cleared = true; Save.store(this.save);
+      return this.returnToTown([
+        L('narr', '魔王の体が、ゆっくりと闇にほどけていく。'),
+        L('partner', '……終わった、の？'),
+        L('hero', 'わからない。でも……空のひび、少しだけ小さくなった気がする。', 'sad'),
+        L('sys', '魔王城を踏破した！（エンディングは今後追加予定）'),
+      ]);
+    }
     if (f === 10) {
       d.cleared = true; Save.store(this.save);
       return this.returnToTown([L('sys', `${name}を踏破した！`), L('partner', 'やったね、{hero}！ ……でも、まだ先がある。')]);

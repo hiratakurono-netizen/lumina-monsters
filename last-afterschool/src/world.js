@@ -209,7 +209,7 @@ class World {
       if (e.boss) {
         e.poise += dmg;
         if (e.poise > 170 && (e.state === 'move' || e.state === 'recover')) { e.poise = 0; e.state = 'stagger'; e.st = 1.1; e.vx = P.face * 160; this.floatText(e.x, e.y - 230, 'BREAK!', '#9fe0ff', 24); if (e.moss > 0) this.stripMoss(e, 0.35); }
-        if (e.moss > 0 && el === e.d.moss.el) this.stripMoss(e, atk.special ? 0.3 : 0.1);   // 苔・氷の鎧は炎、溶岩の鎧は氷ではがれる
+        if (e.moss > 0 && (e.d.moss.el === 'any' ? el !== 'none' : el === e.d.moss.el)) this.stripMoss(e, atk.special ? 0.3 : 0.1);   // 苔・氷の鎧は炎、溶岩の鎧は氷ではがれる
       } else {
         e.vx = (Math.sign(e.x - P.x) || P.face) * (h.kb || 150) * (atk.special ? 1.4 : 1); // 主人公から離れる向きに飛ばす
         if (h.launch) { e.vy = -h.launch; e.launched = true; e.onGround = false; }
@@ -313,7 +313,7 @@ class World {
       o.t += dt; o.cd -= dt;
       if (o.dead) continue;
       const near = Math.abs(P.x - o.x) < 36 && Math.abs(P.y - o.y) < 60;
-      if (o.kind === 'campfire' && near && o.cd <= 0 && this.state === 'play') {
+      if ((o.kind === 'campfire' || o.kind === 'candle') && near && o.cd <= 0 && this.state === 'play') {   // たき火・燭台：炎が宿る
         o.cd = 1; const fresh = !(P.tempElT > 0 && P.tempEl === 'fire');
         P.tempEl = 'fire'; P.tempElT = 30;
         if (fresh) { Audio2.sfx('fire'); Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '武器に炎が宿った！（30秒）', '#ffb35a', 16); this.spark(P.x, P.y - 60, '#ff9a3a', 18); }
@@ -330,7 +330,7 @@ class World {
   envObj(o, P, near) {
     const run = this.game.run;
     if (o.kind === 'cactus' && near && o.cd <= 0) { o.cd = 1; P.hurt(4, o.x); }   // とげ
-    if (o.kind === 'lavapit' && Math.abs(P.x - o.x) < 34 && P.onGround && Math.abs(P.y - o.y) < 4 && o.cd <= 0) { o.cd = 0.8; P.hurt(10, o.x); this.spark(P.x, P.y, '#ff7a2a', 10); }
+    if ((o.kind === 'lavapit' || o.kind === 'abyss') && Math.abs(P.x - o.x) < 34 && P.onGround && Math.abs(P.y - o.y) < 4 && o.cd <= 0) { o.cd = 0.8; P.hurt(10, o.x); this.spark(P.x, P.y, '#ff7a2a', 10); }
     if (o.kind === 'oasis' && near && !o.used && run) {
       o.used = true; run.water = 100; run.heat = 0; P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.2);
       Audio2.sfx('heal'); this.floatText(P.x, P.y - 160, 'オアシスの水で生き返る！', '#9fe0ff', 16);
@@ -382,12 +382,12 @@ class World {
       } else if (o.kind === 'bush') {
         ctx.fillStyle = '#4f7f52'; for (const [a, b, r] of [[-14, -14, 16], [12, -14, 15], [0, -24, 16]]) { ctx.beginPath(); ctx.arc(x + a, y + b, r, 0, 7); ctx.fill(); }
         ctx.fillStyle = '#6fa06a'; for (const [a, b] of [[-10, -22], [8, -26], [16, -12]]) R('#8fca7a', a, b, 4, 4);
-      } else if (o.kind === 'deco' || o.kind === 'cactus' || o.kind === 'oasis' || o.kind === 'icecrystal' || o.kind === 'lavapit') {
-        const key = o.kind === 'deco' ? o.img : { cactus: 'desert_cactus', oasis: 'desert_palm', icecrystal: 'snow_ice', lavapit: 'volcano_lavapit' }[o.kind];
-        const sc = o.s || { cactus: 0.75, oasis: 1.0, icecrystal: 0.9, lavapit: 0.9 }[o.kind], im = IMG[ENV[key]];
+      } else if (['deco', 'cactus', 'oasis', 'icecrystal', 'lavapit', 'abyss', 'candle'].includes(o.kind)) {
+        const key = o.kind === 'deco' ? o.img : { cactus: 'desert_cactus', oasis: 'desert_palm', icecrystal: 'snow_ice', lavapit: 'volcano_lavapit', abyss: 'castle_out_abyss', candle: 'castle_in_candle' }[o.kind];
+        const sc = o.s || { cactus: 0.75, oasis: 1.0, icecrystal: 0.9, lavapit: 0.9, abyss: 1.1, candle: 1.1 }[o.kind], im = IMG[ENV[key]];
         if (o.kind === 'oasis') { ctx.fillStyle = 'rgba(90,190,230,.85)'; ctx.beginPath(); ctx.ellipse(x, y - 3, 46, 7, 0, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(220,250,255,.7)'; ctx.fillRect(x - 20, y - 6, 14, 2); }
         if (o.kind === 'icecrystal' || o.kind === 'frostvent') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.3 + Math.sin(o.t * 3) * 0.1; ctx.fillStyle = '#9fe0ff'; ctx.beginPath(); ctx.arc(x, y - 26, 34, 0, 7); ctx.fill(); ctx.restore(); }
-        if (im && im.width) ctx.drawImage(im, Math.round(x - im.width * sc / 2), Math.round(y - im.height * sc + (o.kind === 'lavapit' ? im.height * sc * 0.55 : 2)), im.width * sc, im.height * sc);
+        if (im && im.width) ctx.drawImage(im, Math.round(x - im.width * sc / 2), Math.round(y - im.height * sc + ((o.kind === 'lavapit' || o.kind === 'abyss') ? im.height * sc * 0.55 : 2)), im.width * sc, im.height * sc);
         if (o.kind === 'oasis' && o.used) { ctx.globalAlpha = 0.6; ctx.fillStyle = '#c9a77e'; ctx.fillRect(x - 46, y - 6, 92, 6); ctx.globalAlpha = 1; }
       } else if (o.kind === 'frostvent') {   // 冷気の噴出口（火山）
         R('#3a3a48', -22, -10, 44, 10); R('#5a6a80', -16, -14, 32, 5);

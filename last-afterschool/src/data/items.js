@@ -16,13 +16,17 @@ const BIOME_PROPS = {
   desert: ['sky', 'layer0', 'layer1', 'ground', 'oneway', 'obelisk', 'house', 'cactus', 'cactus2', 'cactus3', 'palm', 'palms', 'skull', 'skull2', 'block', 'bricks', 'i_dagger', 'i_sword', 'i_axe'],
   snow: ['sky', 'layer0', 'layer1', 'layer2', 'ground', 'oneway', 'tower', 'igloo', 'tree', 'tree2', 'tree3', 'skeleton', 'ice', 'skull', 'i_dagger', 'i_sword', 'i_axe'],
   volcano: ['sky', 'layer0', 'layer1', 'layer2', 'ground', 'oneway', 'tower', 'furnace', 'deadtree', 'deadtree2', 'deadtree3', 'lavapit', 'skeleton', 'i_dagger', 'i_sword', 'i_axe'],
+  castle_out: ['sky', 'layer0', 'layer1', 'layer2', 'ground', 'oneway', 'keep', 'throne', 'deadtree', 'deadtree2', 'abyss', 'skeleton', 'rubble', 'orb', 'i_dagger', 'i_sword', 'i_axe'],
+  castle_in: ['sky', 'layer0', 'layer1', 'ground', 'oneway', 'candle', 'candle2', 'smallthrone', 'bonethrone', 'keep', 'throne', 'deadtree', 'deadtree2', 'deadtree3', 'furnace', 'chest', 'skeleton', 'rubble', 'i_dagger', 'i_sword', 'i_axe'],
 };
 for (const [b, list] of Object.entries(BIOME_PROPS)) for (const n of list) ENV[`${b}_${n}`] = `assets/env/${b}_${n}.png`;
 // 専用のアイコン画像がある装備
 const ITEM_ICON = { w_chair_pipe: 'assets/env/i_chair_pipe.png', w_bat_mop: 'assets/env/i_bat_mop.png', w_bat_metal: 'assets/env/i_bat_metal.png',
   w_stone_dagger: ENV.desert_i_dagger, w_stone_sword: ENV.desert_i_sword, w_stone_axe: ENV.desert_i_axe,
   w_ice_dagger: ENV.snow_i_dagger, w_frost_sword: ENV.snow_i_sword, w_ice_axe: ENV.snow_i_axe,
-  w_obsidian_dagger: ENV.volcano_i_dagger, w_magma_blade: ENV.volcano_i_sword, w_volcano_axe: ENV.volcano_i_axe };
+  w_obsidian_dagger: ENV.volcano_i_dagger, w_magma_blade: ENV.volcano_i_sword, w_volcano_axe: ENV.volcano_i_axe,
+  w_fang_dagger: ENV.castle_out_i_dagger, w_demon_sword: ENV.castle_out_i_sword, w_shatter_axe: ENV.castle_in_i_axe,
+  w_dark_dagger: ENV.castle_in_i_dagger, w_king_sword: ENV.castle_in_i_sword };
 
 const RARITIES = [
   { id: 'common',   name: 'コモン',     color: '#e8e4f0', affixes: 0, mul: 1.00, weight: 60 },
@@ -62,6 +66,12 @@ const ITEM_BASES = {
   w_obsidian_dagger:{ kind: 'weapon', type: 'bat',   name: '黒曜石の短剣',   atk: 40, price: 900, minFloor: 31 },
   w_magma_blade:    { kind: 'weapon', type: 'chair', name: 'マグマブレード', atk: 56, price: 1100, minFloor: 33, element: 'fire' },
   w_volcano_axe:    { kind: 'weapon', type: 'desk',  name: '火山の斧',       atk: 80, price: 1300, minFloor: 35, element: 'fire' },
+  // 魔王城（深さ41〜50）
+  w_fang_dagger:    { kind: 'weapon', type: 'bat',   name: '魔王の牙の短剣', atk: 52, price: 1600, minFloor: 41 },
+  w_demon_sword:    { kind: 'weapon', type: 'chair', name: '魔王の魔剣',     atk: 72, price: 1900, minFloor: 43 },
+  w_shatter_axe:    { kind: 'weapon', type: 'desk',  name: '魔王の破砕斧',   atk: 100, price: 2300, minFloor: 45 },
+  w_dark_dagger:    { kind: 'weapon', type: 'bat',   name: '魔王の暗黒短剣', atk: 60, price: 2400, minFloor: 46 },
+  w_king_sword:     { kind: 'weapon', type: 'chair', name: '魔王の魔王剣',   atk: 84, price: 2800, minFloor: 48 },
   // ---- 防具（見た目は変わらない） ----
   a_uniform:    { kind: 'armor', name: '制服',             def: 0,  hp: 0,  price: 0,   minFloor: 99 },
   a_jersey:     { kind: 'armor', name: '学校ジャージ',     def: 6,  hp: 10, price: 120, minFloor: 1 },
@@ -70,6 +80,7 @@ const ITEM_BASES = {
   a_cloak:      { kind: 'armor', name: '砂よけの外套',     def: 24, hp: 30, price: 480, minFloor: 12 },
   a_down:       { kind: 'armor', name: 'ダウンジャケット', def: 34, hp: 50, price: 760, minFloor: 22 },
   a_fireproof:  { kind: 'armor', name: '耐火の防護服',     def: 46, hp: 70, price: 1100, minFloor: 32 },
+  a_darkmail:   { kind: 'armor', name: '黒鉄の胸当て',     def: 60, hp: 90, price: 1700, minFloor: 42 },
   // ---- アクセサリー ----
   c_hairpin:    { kind: 'accessory', name: 'ヘアピン',     crit: 4,  price: 90,  minFloor: 1 },
   c_ribbon:     { kind: 'accessory', name: 'リボン',       hp: 15,   price: 90,  minFloor: 1 },
@@ -78,6 +89,7 @@ const ITEM_BASES = {
   c_sun:        { kind: 'accessory', name: '太陽のペンダント', hp: 40, def: 6, price: 420, minFloor: 12 },
   c_snowflake:  { kind: 'accessory', name: '雪の結晶のブローチ', crit: 9, price: 640, minFloor: 22 },
   c_ember:      { kind: 'accessory', name: '熾火の指輪',     spd: 10, def: 10, price: 900, minFloor: 32 },
+  c_orb:        { kind: 'accessory', name: '魔石のペンダント', hp: 60, crit: 8, price: 1500, minFloor: 44 },
 };
 
 // 消耗品（同じ物は個数で重ねる）。use は戦闘中の効果（ダンジョンの段階で使う）

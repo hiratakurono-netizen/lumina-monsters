@@ -20,6 +20,9 @@ const DungeonGen = {
   },
 
   layout(D, floor, seed) {
+    // 魔王城のように階で見た目・敵が変わるダンジョン（zones）
+    const Z = D.zones && D.zones.find(z => floor <= z.upTo);
+    if (Z) D = Object.assign({}, D, Z, { chunks: Z.objMap ? biomeChunks(Object.assign({ bush: 'abyss', mushroom: 'geyser' }, Z.objMap)) : D.chunks, name: Z.name });
     const rng = makeRng(seed), C = D.chunks;
     const isBoss = !!D.bosses[floor];
     // 中間パーツの数：浅い階 4〜5、深い階 7〜8

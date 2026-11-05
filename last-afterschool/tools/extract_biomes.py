@@ -42,6 +42,26 @@ BIOMES = {
                   'deadtree2': (1218, 480, 1294, 598), 'deadtree3': (1296, 434, 1404, 598), 'lavapit': (1414, 484, 1507, 530),
                   'skeleton': (1126, 592, 1294, 678)},
     },
+    'castle_out': {
+        'sheet': 'sheet_env_castle_out.jpg', 'bg': (20, 70, 133),
+        'sky': [(778, 33, 1508, 120)], 'layers': [(778, 128, 1508, 219), (778, 226, 1508, 317), (778, 325, 1508, 417)],
+        'ground': (9, 300, 540, 342), 'oneway': (9, 411, 540, 454),
+        'props': {'i_dagger': (28, 58, 142, 188), 'i_sword': (172, 28, 336, 202), 'i_axe': (322, 36, 478, 198),
+                  'keep': (788, 484, 982, 664), 'throne': (1018, 424, 1172, 572), 'deadtree': (1206, 428, 1302, 596),
+                  'deadtree2': (1306, 428, 1408, 596), 'abyss': (1432, 462, 1509, 516), 'skeleton': (1008, 598, 1200, 666),
+                  'rubble': (1318, 598, 1440, 662), 'orb': (1440, 588, 1509, 666)},
+    },
+    'castle_in': {
+        'sheet': 'sheet_env_castle_in.jpg', 'bg': (19, 68, 127),
+        'sky': [(785, 31, 1508, 117)], 'layers': [(785, 126, 1508, 218), (785, 226, 1508, 317)],
+        'ground': (9, 300, 545, 342), 'oneway': (9, 412, 545, 455),
+        'props': {'i_dagger': (28, 58, 142, 188), 'i_sword': (172, 28, 336, 202), 'i_axe': (322, 36, 480, 198),
+                  'candle': (798, 338, 850, 418), 'candle2': (850, 338, 898, 418), 'smallthrone': (1088, 322, 1192, 420),
+                  'bonethrone': (1322, 322, 1462, 420), 'keep': (798, 484, 992, 670), 'throne': (1038, 424, 1182, 574),
+                  'deadtree': (1192, 424, 1272, 562), 'deadtree2': (1270, 428, 1332, 562), 'deadtree3': (1330, 428, 1402, 562),
+                  'furnace': (1412, 428, 1509, 536), 'chest': (1342, 552, 1402, 602), 'skeleton': (1012, 598, 1142, 668),
+                  'rubble': (1328, 598, 1442, 670)},
+    },
 }
 
 def key(a, bg, tol=70, trim=1):
@@ -75,7 +95,7 @@ def crop(a, b): return a[b[1]:b[3], b[0]:b[2]]
 def main():
     os.makedirs(OUT, exist_ok=True)
     for name, B in BIOMES.items():
-        a = np.asarray(Image.open(os.path.join(SRC, f'sheet_env_{name}.jpg')).convert('RGB')).astype(int)
+        a = np.asarray(Image.open(os.path.join(SRC, B.get('sheet', f'sheet_env_{name}.jpg'))).convert('RGB')).astype(int)
         save = lambda img, n: img.save(os.path.join(OUT, f'{name}_{n}.png'), optimize=True)
         save(Image.fromarray(crop(a, B['sky'][0]).astype(np.uint8)), 'sky')
         for i, b in enumerate(B['layers']): save(key(crop(a, b), B['bg']), f'layer{i}')

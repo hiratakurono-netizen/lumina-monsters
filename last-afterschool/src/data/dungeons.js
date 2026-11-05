@@ -131,3 +131,41 @@ Object.assign(ENEMIES, {
   // 溶岩の鎧：氷で冷え固まる
   magma_colossus:{ spr: 'golem', scale: 1.2, hp: 1300, dmg: 15, speed: 70, ai: 'golemMoss', vine: 'lava', moss: { el: 'ice', name: '溶岩の鎧', filter: 'hue-rotate(-35deg) saturate(2.2) brightness(1.1)' }, w: 175, h: 190, exp: 420, boss: true, name: '溶岩の巨像（仮）' },
 });
+
+// =====================================================================
+//  魔王城（最終ダンジョン）：1〜5階は城の外（荒野と城門）、6〜10階は城の中
+//  環境の制限はなし。敵の強さ・攻撃・ボス戦が中心。zones で階ごとに見た目と敵を切り替える
+// =====================================================================
+DUNGEONS.castle = {
+  name: '魔王城', tier: 4, bgm: 'battle', bossBgm: 'boss', jumpMul: 1,
+  // 外：草むら→深淵の裂け目（踏むと痛い）、キノコ→間欠泉 ／ 中：たき火→燭台（ふれると炎）
+  chunks: biomeChunks({ bush: 'abyss', mushroom: 'geyser' }),
+  zones: [
+    { upTo: 5, name: '魔王城・外郭', bg: 'castle_out',
+      terrainTheme: { texture: ENV.castle_out_ground, onewayTexture: ENV.castle_out_oneway },
+      decor: [{ img: 'castle_out_deadtree', s: 0.75 }, { img: 'castle_out_rubble', s: 0.8 }, { img: 'castle_out_skeleton', s: 0.6 }, { img: 'castle_out_orb', s: 0.8 }],
+      foes(f) { const t = [['dark_knight', 5], ['eye_bat', 4], ['gargoyle', 3]]; if (f >= 3) t.push(['shade', 3]); return t; } },
+    { upTo: 10, name: '魔王城・城内', bg: 'castle_in',
+      terrainTheme: { texture: ENV.castle_in_ground, onewayTexture: ENV.castle_in_oneway },
+      decor: [{ img: 'castle_in_candle', s: 0.9 }, { img: 'castle_in_deadtree', s: 0.75 }, { img: 'castle_in_rubble', s: 0.8 }, { img: 'castle_in_candle2', s: 0.9 }],
+      objMap: { bush: null, campfire: 'candle' },
+      foes(f) { const t = [['royal_guard', 5], ['succubus', 3], ['eye_sentry', 3], ['dark_knight', 2]]; if (f >= 8) t.push(['royal_guard', 3], ['succubus', 2]); return t; } },
+  ],
+  bosses: { 5: 'gate_keeper', 10: 'demon_king' },
+};
+
+Object.assign(ENEMIES, {
+  // 城の外
+  dark_knight: { spr: 'knight2', scale: 0.62, hp: 120, dmg: 13, speed: 85, ai: 'lunge', w: 66, h: 84, exp: 20 },
+  eye_bat:     { spr: 'eye_bat', scale: 0.36, hp: 60, dmg: 11, speed: 150, ai: 'fly', w: 60, h: 52, exp: 16, fly: true },
+  gargoyle:    { spr: 'bat_big', scale: 0.4, hp: 70, dmg: 12, speed: 170, ai: 'fly', w: 70, h: 44, exp: 17, fly: true },
+  shade:       { spr: 'hood', scale: 0.6, hp: 90, dmg: 12, speed: 70, ai: 'spore', w: 60, h: 68, exp: 18 },
+  // 城の中
+  royal_guard: { spr: 'knight_l', scale: 0.48, hp: 170, dmg: 15, speed: 90, ai: 'lunge', w: 90, h: 70, exp: 26 },
+  succubus:    { spr: 'succubus', scale: 0.36, hp: 110, dmg: 13, speed: 85, ai: 'ghost', w: 70, h: 72, exp: 24, fly: true, weak: 'ice' },
+  eye_sentry:  { spr: 'eye_mech', scale: 0.48, hp: 120, dmg: 13, speed: 50, ai: 'spore', w: 66, h: 56, exp: 22 },
+  // 5階：城門の番人（飛びかかり・突進・子分を呼ぶ）
+  gate_keeper: { spr: 'castle', scale: 0.75, hp: 640, dmg: 15, speed: 170, ai: 'wolfBoss', minion: 'dark_knight', w: 150, h: 175, exp: 300, boss: true, name: '動く城門（仮）' },
+  // 10階：魔王。魔王の結界（ダメージ半減）は炎か氷、どちらの属性でもはがせる。HP半分で闇の弾を撃ってくる
+  demon_king:  { spr: 'eldereye', scale: 0.85, hp: 1500, dmg: 16, speed: 60, ai: 'demonKing', vine: 'abyss', moss: { el: 'any', name: '魔王の結界', filter: 'hue-rotate(250deg) saturate(1.8) brightness(1.2)' }, w: 190, h: 175, exp: 800, boss: true, name: '魔王（仮）' },
+});

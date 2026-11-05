@@ -588,7 +588,7 @@ const AI = {
         if (e.next === 'dash') e.face = e.dir;
         if (e.st <= 0) {
           if (e.next === 'summon') {
-            for (const side of [1, -1]) { const m = W.makeEnemy('wolf', side > 0 ? hi : lo, undefined, { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; W.enemies.push(m); }
+            for (const side of [1, -1]) { const m = W.makeEnemy(e.d.minion || 'wolf', side > 0 ? hi : lo, undefined, { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; W.enemies.push(m); }
             e.state = 'move'; e.cool = 1.5;
           } else { e.state = 'dash'; e.st = 1.6; }
         }
@@ -608,6 +608,20 @@ const AI = {
     }
   },
   // 苔むした巨像：巨像の攻撃（叩きつけ・突進・岩）に加えて、足元からツタを生やす
+  // 魔王：巨像と同じ地上の攻撃＋深淵の棘。HPが半分を切ると、扇状に闇の弾を撃ち、騎士を呼ぶ
+  demonKing(e, dt, dir, dist, P, W) {
+    e.orbCD = (e.orbCD === undefined ? 3 : e.orbCD) - dt;
+    if (e.rage && e.state === 'move' && e.orbCD <= 0) {
+      e.orbCD = 3.6; Audio2.sfx('warn'); e.state = 'recover'; e.st = 1.0; e.vx = 0;
+      for (let i = -2; i <= 2; i++) W.addProj(new DarkOrb(W, e.x, e.y - e.d.h * 0.6, Math.atan2(P.y - 60 - (e.y - e.d.h * 0.6), P.x - e.x) + i * 0.22, 0.5));
+      if (!e.called || W.enemies.filter(x => x.type === 'royal_guard').length === 0 && Math.random() < 0.35) {
+        e.called = true;
+        for (const side of [1, -1]) { const lo = W.camLock ? W.camLock.min + 90 : 90, hi = W.camLock ? W.camLock.max + VIEW_W - 90 : W.ch.length - 90; const m = W.makeEnemy('royal_guard', side > 0 ? hi : lo, undefined, { hpMul: 2 }); m.vx = -side * 120; W.enemies.push(m); }
+      }
+      return;
+    }
+    AI.golemMoss(e, dt, dir, dist, P, W);
+  },
   golemMoss(e, dt, dir, dist, P, W) {
     if (e.moss === undefined) e.moss = e.d.moss ? 1 : 0;
     e.vineCD = (e.vineCD === undefined ? 4 : e.vineCD) - dt;
@@ -684,6 +698,7 @@ const VINE_COLORS = {
   sand: { warn: 'rgba(240,200,120,A)', dark: '#a8763c', light: '#e8c98a' },
   ice: { warn: 'rgba(160,220,255,A)', dark: '#5a8fc0', light: '#dff4ff' },
   lava: { warn: 'rgba(255,120,60,A)', dark: '#7a2a14', light: '#ffb35a' },
+  abyss: { warn: 'rgba(190,110,255,A)', dark: '#2a1040', light: '#b070ff' },
 };
 class Vine {
   constructor(w, x, delay, kind = 'grass') { this.w = w; this.x = x; this.t = -delay; this.c = VINE_COLORS[kind] || VINE_COLORS.grass; this.dead = false; this.hit = false; this.gy = w.terrain.groundBelow(x, 0, 0); if (this.gy === Infinity) this.dead = true; }
@@ -698,6 +713,22 @@ class Vine {
     const h = 120 * Math.min(1, this.t / 0.08) * (this.t > 0.3 ? 1 - (this.t - 0.3) / 0.15 : 1);
     ctx.fillStyle = this.c.dark; ctx.beginPath(); ctx.moveTo(x - 22, this.gy); ctx.lineTo(x - 4, this.gy - h); ctx.lineTo(x + 6, this.gy - h * 0.7); ctx.lineTo(x + 22, this.gy); ctx.fill();
     ctx.fillStyle = this.c.light; ctx.fillRect(x - 3, this.gy - h, 5, h * 0.9);
+  }
+}
+// 闇の弾：少し溜めてから真っすぐ飛ぶ
+class DarkOrb {
+  constructor(w, x, y, ang, delay) { Object.assign(this, { w, x, y, ang, t: -delay, dead: false }); }
+  update(dt) {
+    this.t += dt; if (this.t < 0) return;
+    this.x += Math.cos(this.ang) * 330 * dt; this.y += Math.sin(this.ang) * 330 * dt;
+    if (this.t > 3.5 || this.y > GROUND_Y + 20) this.dead = true;
+    if (overlap([this.x - 14, this.y - 14, this.x + 14, this.y + 14], this.w.player.box())) { this.w.player.hurt(12, this.x); this.dead = true; }
+  }
+  draw(ctx, cam) {
+    const x = this.x - cam, r = this.t < 0 ? 6 + (0.5 + this.t) * 16 : 13;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, this.y, 1, x, this.y, r * 2); g.addColorStop(0, '#f0d8ff'); g.addColorStop(0.4, '#9a4dff'); g.addColorStop(1, 'rgba(60,0,120,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - r * 2, this.y - r * 2, r * 4, r * 4); ctx.restore();
   }
 }
 class Spore {
