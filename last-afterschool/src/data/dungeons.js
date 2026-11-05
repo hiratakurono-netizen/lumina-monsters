@@ -30,20 +30,45 @@ const DUNGEONS = {
     chunks: {
       start: { w: 520, solids: [G0(0, 520)], foes: [], chests: [] },
       exit:  { w: 640, solids: [G0(0, 640)], foes: [], chests: [], exitX: 420 },
-      flat:  { w: 720, weight: 3, solids: [G0(0, 720)], foes: [{ x: 260 }, { x: 520 }, { x: 400, y: 300, fly: true }], chests: [], objs: [{ x: 120, kind: 'bush', p: 0.6 }, { x: 640, kind: 'bush', p: 0.5 }, { x: 380, kind: 'campfire', p: 0.18 }] },
-      step:  { w: 820, weight: 3, solids: [G0(0, 820), BL(300, 408, 160, 60), OW(520, 340, 160)], foes: [{ x: 150 }, { x: 680 }, { x: 600, y: 340 }], chests: [{ x: 600, y: 340 }] },
-      pit:   { w: 760, weight: 2, solids: [G0(0, 260), OW(300, 380, 120), G0(460, 300)], foes: [{ x: 620 }, { x: 360, y: 260, fly: true }], chests: [] },
-      gap:   { w: 620, weight: 2, solids: [G0(0, 230), G0(350, 270)], foes: [{ x: 480 }], chests: [] },
-      hill:  { w: 920, weight: 2, solids: [G0(0, 920), BL(250, 388, 400, 80), OW(380, 288, 140)], foes: [{ x: 120 }, { x: 800 }, { x: 450, y: 388 }], chests: [{ x: 450, y: 288 }], objs: [{ x: 300, y: 388, kind: 'bush', p: 0.6 }, { x: 860, kind: 'campfire', p: 0.25 }] },
-      ledges:{ w: 840, weight: 2, solids: [G0(0, 840), OW(150, 360, 140), OW(380, 280, 140), OW(610, 360, 140)], foes: [{ x: 300 }, { x: 720 }, { x: 450, y: 200, fly: true }], chests: [{ x: 450, y: 280 }] },
+      // role：部屋の役割（explore 探索 / action 足場アクション / battle 戦闘 / treasure 宝 / secret 隠し / gimmick 環境ギミック）
+      // feats：ダンジョンごとに中身が変わる「枠」。slot の意味は generator.js の BIOME_SLOTS
+      //   gate 属性で壊す壁（進むのに必須）／source その属性の源（必ず gate より手前）／bridge 渡れない穴を越える仕掛け
+      //   hazard 地形の危険物／block 宝箱をふさぐ岩など（任意）／cracked 隠し通路のひび割れた壁
+      flat:  { w: 720, weight: 3, role: 'explore', solids: [G0(0, 720)], foes: [{ x: 260 }, { x: 520 }, { x: 400, y: 300, fly: true }], chests: [], objs: [{ x: 120, kind: 'bush', p: 0.6 }, { x: 640, kind: 'bush', p: 0.5 }, { x: 380, kind: 'campfire', p: 0.18 }] },
+      step:  { w: 820, weight: 3, role: 'explore', solids: [G0(0, 820), BL(300, 408, 160, 60), OW(520, 340, 160)], foes: [{ x: 150 }, { x: 680 }, { x: 600, y: 340 }], chests: [{ x: 600, y: 340 }] },
+      pit:   { w: 760, weight: 2, role: 'action', solids: [G0(0, 260), OW(300, 380, 120), G0(460, 300)], foes: [{ x: 620 }, { x: 360, y: 260, fly: true }], chests: [] },
+      gap:   { w: 620, weight: 2, role: 'action', solids: [G0(0, 230), G0(350, 270)], foes: [{ x: 480 }], chests: [] },
+      hill:  { w: 920, weight: 2, role: 'explore', solids: [G0(0, 920), BL(250, 388, 400, 80), OW(380, 288, 140)], foes: [{ x: 120 }, { x: 800 }, { x: 450, y: 388 }], chests: [{ x: 450, y: 288 }], objs: [{ x: 300, y: 388, kind: 'bush', p: 0.6 }, { x: 860, kind: 'campfire', p: 0.25 }] },
+      ledges:{ w: 840, weight: 2, role: 'action', solids: [G0(0, 840), OW(150, 360, 140), OW(380, 280, 140), OW(610, 360, 140)], foes: [{ x: 300 }, { x: 720 }, { x: 450, y: 200, fly: true }], chests: [{ x: 450, y: 280 }] },
       // 寄り道：高い所の宝箱（足場から2段ジャンプで届く）。中身は良いもの
-      hidden:{ w: 900, weight: 1, solids: [G0(0, 900), OW(480, 340, 130), OW(680, 220, 130)], foes: [{ x: 200 }, { x: 820 }], chests: [{ x: 745, y: 220, hidden: true }] },
-      // 戦闘部屋：入るとカメラが止まり、敵が湧く
+      hidden:{ w: 900, weight: 1, role: 'treasure', solids: [G0(0, 900), OW(480, 340, 130), OW(680, 220, 130)], foes: [{ x: 200 }, { x: 820 }], chests: [{ x: 745, y: 220, hidden: true }] },
       // キノコのばね：高い足場の宝箱へ（キノコで跳ばないと届かない寄り道）
-      spring:{ w: 760, weight: 2, solids: [G0(0, 760), OW(420, 170, 150)], foes: [{ x: 160 }, { x: 640 }], chests: [{ x: 495, y: 170, hidden: true, viaSpring: true }], objs: [{ x: 330, kind: 'mushroom', p: 1 }, { x: 80, kind: 'bush', p: 0.6 }] },
-      arena: { w: 980, weight: 2, solids: [G0(0, 980), OW(160, 360, 160), OW(660, 360, 160)], foes: [], chests: [], wave: true },
+      spring:{ w: 760, weight: 2, role: 'treasure', solids: [G0(0, 760), OW(420, 170, 150)], foes: [{ x: 160 }, { x: 640 }], chests: [{ x: 495, y: 170, hidden: true, viaSpring: true }], objs: [{ x: 330, kind: 'mushroom', p: 1 }, { x: 80, kind: 'bush', p: 0.6 }] },
+      // 戦闘部屋：入るとカメラが止まり、敵が湧く
+      arena: { w: 980, weight: 2, role: 'battle', solids: [G0(0, 980), OW(160, 360, 160), OW(660, 360, 160)], foes: [], chests: [], wave: true },
+      // ---- 地形の部屋（本編改善） ----
+      // 崖：高台に登って、反対側へ飛び降りる。高台の上に宝箱と敵
+      cliff: { w: 1000, weight: 2, role: 'action', solids: [G0(0, 330), OW(200, 378, 110), BL(330, 268, 360, 330), G0(690, 310)], foes: [{ x: 150 }, { x: 520, y: 268 }, { x: 860 }], chests: [{ x: 640, y: 268 }] },
+      // 上下の分かれ道：下は危険物と敵、上は足場伝いに宝箱
+      split: { w: 1100, weight: 2, role: 'explore', solids: [G0(0, 1100), OW(160, 340, 170), OW(400, 250, 220), OW(700, 340, 170)], foes: [{ x: 300 }, { x: 900 }, { x: 510, y: 250 }, { x: 620, y: 180, fly: true }], chests: [{ x: 470, y: 250 }], feats: [{ slot: 'hazard', x: 560 }] },
+      // 動く床：ジャンプでは越えられない幅の穴
+      movepit: { w: 900, weight: 2, role: 'action', solids: [G0(0, 240), Object.assign(OW(300, 400, 130), { move: { range: 280, period: 4.2 } }), G0(700, 200)], foes: [{ x: 120 }, { x: 800 }, { x: 450, y: 250, fly: true }], chests: [] },
+      // 崩れる足場：乗ると少しして落ちる（数秒で戻る）
+      crumbles: { w: 1000, weight: 2, role: 'action', solids: [G0(0, 220), Object.assign(OW(300, 410, 110), { crumble: true }), Object.assign(OW(500, 360, 110), { crumble: true }), Object.assign(OW(700, 410, 110), { crumble: true }), G0(880, 120)], foes: [{ x: 120 }, { x: 560, y: 240, fly: true }], chests: [] },
+      // 属性の壁：手前の「源」で武器に属性を宿して壁を壊す（源は必ず手前にある）
+      gatewall: { w: 960, weight: 2, role: 'gimmick', solids: [G0(0, 960)], foes: [{ x: 360 }, { x: 760 }, { x: 860 }], chests: [], feats: [{ slot: 'source', x: 180 }, { slot: 'gate', x: 540 }] },
+      // 渡れない穴：雪原は水を凍らせる、火山は溶岩を冷やす、ほかは動く床・崩れる足場
+      liquid: { w: 980, weight: 2, role: 'gimmick', solids: [G0(0, 320), G0(720, 260)], foes: [{ x: 120 }, { x: 860 }, { x: 520, y: 260, fly: true }], chests: [], feats: [{ slot: 'source', x: 170, bridge: true }, { slot: 'bridge', x: 320, w: 400 }] },
+      // 危険地帯：地上は危険物、上の足場を渡れば避けられる
+      hazardrun: { w: 1100, weight: 2, role: 'gimmick', solids: [G0(0, 1100), OW(350, 330, 170), OW(620, 330, 170)], foes: [{ x: 520 }, { x: 980 }, { x: 500, y: 220, fly: true }], chests: [], feats: [{ slot: 'hazard', x: 280 }, { slot: 'hazard', x: 760 }] },
+      // 隠し通路：一番上の足場の先、ひび割れた壁の奥に宝箱
+      secret: { w: 1000, weight: 1, role: 'secret', solids: [G0(0, 1000), OW(260, 380, 130), OW(440, 290, 130), OW(620, 200, 170), BL(830, 200, 170, 30)], foes: [{ x: 160 }, { x: 900 }], chests: [{ x: 910, y: 200, hidden: true }], feats: [{ slot: 'cracked', x: 790, y: -300, w: 40, h: 500 }, { slot: 'stone', x: 985, y: -300, w: 15, h: 500 }] },
+      // 埋まった宝箱：岩・砂山・氷塊を壊すと宝箱が出てくる
+      buried: { w: 820, weight: 2, role: 'treasure', solids: [G0(0, 820)], foes: [{ x: 200 }, { x: 700 }], chests: [{ x: 480, y: GROUND_Y, lockedBy: 'block' }], feats: [{ slot: 'block', x: 480 }] },
+      // 見張り：高台に強化個体（エリート）。倒すと良い物を落とす
+      guard: { w: 1000, weight: 2, role: 'battle', solids: [G0(0, 1000), OW(240, 400, 120), BL(380, 348, 260, 120)], foes: [{ x: 510, y: 348, elite: true }, { x: 200 }, { x: 820 }], chests: [{ x: 600, y: 348 }] },
       // ボス部屋（5階・10階）
-      boss:  { w: 1300, solids: [G0(0, 1300), OW(180, 340, 180), OW(940, 340, 180)], foes: [], chests: [], boss: true, objs: [{ x: 120, kind: 'campfire', p: 1, bossOnly: 10 }] },
+      boss:  { w: 1300, solids: [G0(0, 1300), Object.assign(OW(180, 340, 180), { fragile: true }), Object.assign(OW(940, 340, 180), { fragile: true })], foes: [], chests: [], boss: true, objs: [{ x: 120, kind: 'campfire', p: 1, bossOnly: 10 }] },
     },
     // 5階：中ボス、10階：ボス（専用の行動は第6段階で作る。今は既存の行動の流用：仮）
     bosses: { 5: 'wolf_boss', 10: 'golem_moss' },

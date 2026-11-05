@@ -19,6 +19,7 @@ class World {
     this.chests = (this.ch.chests || []).map(c => Object.assign({ opened: false, t: 0 }, c));
     this.objs = (this.ch.objs || []).map(o => Object.assign({ t: 0, hp: 1, cd: 0 }, o));   // 環境オブジェクト（たき火・草むら・キノコ）
     for (const sp of this.ch.spawns || []) { const e = this.makeEnemy(sp.type, sp.x, sp.y, sp); e.awake = false; e.spawnT = 0; this.enemies.push(e); }
+    if (this.ch.dungeon) Gimmicks.init(this);   // 地形ギミック（動く床・属性の壁・危険物など）
   }
 
   // ---------------- flow ----------------
@@ -51,6 +52,7 @@ class World {
     this.time += this.state === 'play' && !this.dialogue ? dt : 0;
     const P = this.player;
 
+    if (this.ch.dungeon && this.feats) Gimmicks.update(this, dt);
     if (!this.dialogue) {
       P.update(dt);
       if (this.state === 'play') this.checkEvents();
@@ -120,7 +122,7 @@ class World {
   startBossDg() {
     const B = this.ch.boss, min = clamp(B.x - 1000, 0, this.ch.length - VIEW_W);
     this.camLock = { min, max: min + 340 };
-    const b = this.makeEnemy(B.type, B.x, undefined, { hpMul: B.hpMul });
+    const b = this.makeEnemy(B.type, B.x, undefined, B);
     b.cool = 2.5; this.enemies.push(b); this.boss = b;
     this.bossIntro = 2.2; Audio2.sfx('warn'); this.shake = 10;
     this.wave = { ev: { waves: [] }, idx: 99, delay: 0, t: 0, boss: true };
@@ -166,6 +168,8 @@ class World {
     const e = new Enemy(this, type, x, y);
     if (scale && scale.hpMul) { e.hp = e.maxHp = Math.round(d.hp * scale.hpMul); }
     if (scale && scale.dmgMul) e.dmgMul = scale.dmgMul;
+    // 本編のバランス（src/data/balance.js）：防御・攻撃の補正・行動の速さ・強化個体
+    if (scale) { e.def = scale.def || 0; e.dmgK = scale.dmgK || 1; e.agg = scale.agg || 1; e.spd = scale.speed || 1; e.elite = !!scale.elite; }
     return e;
   }
 
@@ -188,8 +192,9 @@ class World {
       this.shake = Math.max(this.shake, h.shake || 10); Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 10);
     }
     if (this.objs && this.objs.length) this.hitObjs(box);
+    if (this.feats) Gimmicks.hit(this, box, el, atk.special);
     let any = false;
-    const lvMul = 1 + (P.lv - 1) * 0.08, spMul = atk.special ? SPECIAL.dmgMul : 1;
+    const lvMul = 1 + (P.lv - 1) * (this.ch.dungeon ? BAL.LV_ATK : 0.08), spMul = atk.special ? SPECIAL.dmgMul : 1;
     for (const e of this.enemies) {
       if (e.dying > 0 || e.spawnT > 0.2) continue;
       if (!overlap(box, e.box())) continue;
@@ -201,7 +206,7 @@ class World {
       if (it) mul *= it.powerMul * (1 + ((P.stats ? P.stats.atkPct : 0) + it.atkPct) / 100);
       const critRate = ((P.stats ? P.stats.crit : 10) + (it ? it.crit : 0)) / 100;
       const crit = Math.random() < critRate; if (crit) mul *= 1.5;
-      const dmg = Math.round(h.dmg * mul * rand(0.92, 1.08));
+      const dmg = Math.max(1, Math.round(BAL.applyDef(h.dmg * mul * rand(0.92, 1.08), e.def)));   // 敵の防御を差し引く（下限あり）
       any = true;
       e.damage(dmg, P.x);
       if (it && it.steal) P.hp = Math.min(P.maxHp, P.hp + dmg * it.steal / 100);   // HP吸収
@@ -246,13 +251,14 @@ class World {
     e.dying = e.boss ? 2.2 : 0.45; e.vx = 0; Audio2.sfx('die');
     this.spark(e.x, e.y - e.d.h / 2, '#e8d8ff', 14);
     const fl = this.ch.dungeon ? this.ch.depth || this.ch.floor : 1;   // 深さ（草原1〜10・砂漠11〜20…）
-    this.player.gainExp(Math.round(e.d.exp * (1 + 0.15 * (fl - 1))));
+    this.player.gainExp(Math.round(e.d.exp * (1 + 0.15 * (fl - 1)) * (e.elite ? 2.5 : 1)));
     if (this.ch.env === 'lava' && this.game.run) this.game.run.timeLeft = Math.min(this.game.run.timeLeft + (e.boss ? 60 : 2), 999);   // 火山：倒すと少し時間がのびる
     if (this.ch.dungeon) {
-      this.dropGold(e.x, e.y - 30, Math.round((3 + fl * 2) * (e.boss ? 15 : 1) * rand(0.7, 1.3)));
-      // 装備のドロップ：ボスは確定、通常の敵はまれに
+      this.dropGold(e.x, e.y - 30, Math.round((3 + fl * 2) * (e.boss ? 15 : e.elite ? BAL.ELITE.gold : 1) * rand(0.7, 1.3)));
+      // 装備のドロップ：ボスは確定（5階は今のダンジョンの武器、10階はボス専用武器）、強化個体も確定、通常の敵はまれに
       const rng = makeRng((Math.random() * 4294967296) >>> 0), save = this.game.save;
-      if (e.boss) { const B = LOOT.BOSS[this.ch.floor] || { n: 1, minTier: 1 }; for (let i = 0; i < B.n; i++) this.dropItem(e.x + (i - 0.5) * 60, e.y - 60, LOOT.roll(save, rng, fl, B)); }
+      if (e.boss) LOOT.bossDrops(save, rng, fl, this.ch.floor, this.ch.dungeonId).forEach((it, i, a) => this.dropItem(e.x + (i - (a.length - 1) / 2) * 60, e.y - 60, it));
+      else if (e.elite) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl + 1, { minTier: 1 }));
       else if (rng.chance(LOOT.ENEMY_ITEM_CHANCE)) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl));
     }
     if (!e.boss && Math.random() < 0.13) this.pickups.push({ x: e.x, y: e.y - 40, vy: -260, t: 0, kind: 'milk' });
@@ -338,9 +344,11 @@ class World {
     if (o.kind === 'icecrystal' && near && o.cd <= 0 && !(P.tempElT > 0 && P.tempEl === 'ice')) {
       o.cd = 1; P.tempEl = 'ice'; P.tempElT = 30; Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '武器に氷が宿った！（30秒）', ELEMENTS.ice.color, 16);
     }
-    if (o.kind === 'frostvent' && near && !o.used) {
-      o.used = true; P.tempEl = 'ice'; P.tempElT = 30; if (run && this.ch.env === 'lava') run.timeLeft += 15;
-      Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '冷気をまとった！ 氷属性＋15秒', ELEMENTS.ice.color, 16);
+    // 冷気の噴出口：何度でも氷属性をまとえる（溶岩の橋で詰まらないように）。時間の延長は1回だけ
+    if (o.kind === 'frostvent' && near && o.cd <= 0 && !(P.tempElT > 0 && P.tempEl === 'ice')) {
+      o.cd = 1; P.tempEl = 'ice'; P.tempElT = 30; const first = !o.used; o.used = true;
+      if (first && run && this.ch.env === 'lava') run.timeLeft += 15;
+      Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, first && this.ch.env === 'lava' ? '冷気をまとった！ 氷属性＋15秒' : '冷気をまとった！ 氷属性', ELEMENTS.ice.color, 16);
     }
   }
   // 攻撃で草むらを壊す
@@ -450,13 +458,15 @@ class World {
     for (const c of this.chests) {
       c.t += dt;
       if (c.opened || this.state !== 'play') continue;
+      if (c.lockedBy) continue;   // 岩・砂山などにふさがれている
       if (Math.abs(P.x - c.x) < 40 && Math.abs(P.y - c.y) < 12) {
         // 宝箱を開ける。中身は今はゴールドだけ（装備のドロップは次の段階で追加：仮）
         c.opened = true; Audio2.sfx('pickup'); this.flash = 0.25;
         this.dropGold(c.x, c.y - 30, Math.round((15 + c.floor * 8) * (c.hidden ? 3 : 1) * rand(0.8, 1.2)));
         // 宝箱の装備：隠し宝箱は必ず入っていて、レアリティも出やすい（2階ぶん深い扱い・アンコモン以上）
         const rng = makeRng((Math.random() * 4294967296) >>> 0), save = this.game.save;
-        if (c.hidden) this.dropItem(c.x, c.y - 40, LOOT.roll(save, rng, c.floor + 2, { minTier: 1 }));
+        if (c.supply) { this.dropItem(c.x, c.y - 40, LOOT.roll(save, rng, c.floor, { kind: 'weapon', current: true, minTier: 1 })); this.floatText(c.x, c.y - 90, '補給の宝箱：このダンジョンの武器', '#9fe0ff', 15); }
+        else if (c.hidden) this.dropItem(c.x, c.y - 40, LOOT.roll(save, rng, c.floor + 2, { minTier: 1 }));
         else if (rng.chance(LOOT.CHEST_ITEM_CHANCE)) this.dropItem(c.x, c.y - 40, LOOT.roll(save, rng, c.floor));
         this.floatText(c.x, c.y - 70, c.hidden ? '隠し宝箱！' : '宝箱', '#ffe27a', 16);
       }
@@ -526,6 +536,7 @@ class World {
     ctx.save(); ctx.translate(Math.round(sx), Math.round(sy));
     const cam = Math.round(this.camX);
     Backgrounds.draw(ctx, this.bg, cam);
+    if (this.feats) Gimmicks.drawBack(this, ctx, cam);
     this.terrain.draw(ctx, cam);
     if (this.objs && this.objs.length) this.drawObjs(ctx, cam);
     if (this.ch.town) Town.drawFacilities(ctx, cam, this);
@@ -537,6 +548,7 @@ class World {
     if (this.partnerOn) this.partner.draw(ctx, cam);
     for (const p of this.projs) p.draw(ctx, cam);
     for (const f of this.fx) f.draw(ctx, cam);
+    if (this.feats) Gimmicks.drawFront(this, ctx, cam);
     for (const f of this.fxTop) f.draw(ctx, cam);
     ctx.restore();
     if (this.flash > 0) { ctx.fillStyle = `rgba(255,248,255,${Math.min(0.75, this.flash)})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }

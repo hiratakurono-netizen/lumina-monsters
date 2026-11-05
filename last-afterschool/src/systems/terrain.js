@@ -6,6 +6,10 @@
 //      oneway … 上から乗れる床。下からはすり抜け、↓＋ジャンプで降りられる
 //      solid  … 乗れて、横（壁）と下（天井）もふさぐブロック
 //    どちらにも surface（ice / snow / lava など、ダンジョンの特殊な床）を付けられる（今は見た目と判定の土台だけ）
+//  ・ギミック（src/dungeon/gimmicks.js）が足場を動かす・消す・出す
+//      off   … 今は存在しない（崩れた床・壊した壁・凍らせる前の水面）。判定にも描画にも使わない
+//      style … ギミック側で描く足場（壁・門・水面の橋など）。地面の素材では描かない
+//      dx    … このフレームに動いた量（動く床。乗っている主人公を一緒に運ぶ）
 //  ・足場がない場所は穴。落ちると画面の下へ抜ける
 // =====================================================================
 class Terrain {
@@ -24,20 +28,20 @@ class Terrain {
   groundBelow(x, y0, hw = 0, skipOneway = false) {
     let best = this.flat ? GROUND_Y : Infinity;
     for (const s of this.solids) {
-      if (skipOneway && s.type === 'oneway') continue;
+      if (s.off || (skipOneway && s.type === 'oneway')) continue;
       if (x + hw > s.x && x - hw < s.x + s.w && s.y >= y0 - 2 && s.y < best) best = s.y;
     }
     return best;
   }
   /** 足元の床そのもの（特殊な床の判定用）。なければ null */
   surfaceAt(x, y, hw = 0) {
-    for (const s of this.solids) if (Math.abs(s.y - y) < 2 && x + hw > s.x && x - hw < s.x + s.w) return s;
+    for (const s of this.solids) if (!s.off && Math.abs(s.y - y) < 2 && x + hw > s.x && x - hw < s.x + s.w) return s;
     return null;
   }
   /** 横移動を solid の壁で止める。体の上端 top〜下端 bottom の範囲で判定 */
   blockX(x, prevX, top, bottom, hw) {
     for (const s of this.solids) {
-      if (s.type !== 'solid') continue;
+      if (s.type !== 'solid' || s.off) continue;
       if (bottom <= s.y + 1 || top >= s.y + s.h) continue;          // 高さが重なっていない
       if (prevX + hw <= s.x && x + hw > s.x) x = s.x - hw;            // 右へ進んで左の壁に当たる
       else if (prevX - hw >= s.x + s.w && x - hw < s.x + s.w) x = s.x + s.w + hw;  // 左へ進んで右の壁に当たる
@@ -48,7 +52,7 @@ class Terrain {
   ceiling(x, headPrev, headNew, hw) {
     let hit = null;
     for (const s of this.solids) {
-      if (s.type !== 'solid') continue;
+      if (s.type !== 'solid' || s.off) continue;
       const bottom = s.y + s.h;
       if (x + hw > s.x && x - hw < s.x + s.w && headPrev >= bottom && headNew < bottom) hit = hit === null ? bottom : Math.max(hit, bottom);
     }
@@ -82,7 +86,8 @@ class Terrain {
     tex = Terrain.mirrored(tex); owTex = Terrain.mirrored(owTex);
     const TW = tex.width, top = Math.min(26, tex.height), soil = tex.height > 50 ? [30, tex.height - 30] : [Math.floor(tex.height / 2), Math.ceil(tex.height / 2)];
     for (const s of this.solids) {
-      const x0 = Math.round(s.x - cam), y = Math.round(s.y);
+      if (s.off || s.style) continue;
+      const x0 = Math.round(s.x - cam) + (s.shake ? Math.round(Math.sin(performance.now() / 20) * 2) : 0), y = Math.round(s.y);
       if (x0 + s.w < -10 || x0 > VIEW_W + 10) continue;
       ctx.save(); ctx.beginPath(); ctx.rect(x0, y - 8, s.w, VIEW_H); ctx.clip();
       const sx0 = ((s.x % TW) + TW) % TW;
@@ -106,8 +111,8 @@ class Terrain {
         if (s.surface === 'snow') { ctx.fillStyle = '#f4fbff'; for (let i = 0; i < s.w; i += 22) { ctx.beginPath(); ctx.ellipse(x0 + i + 11, y - 4, 14, 7, 0, Math.PI, 0); ctx.fill(); } }
         // 側面（段差・壁）に影
         // 隣に同じ高さの地面が続いている側には影を付けない（継ぎ目の縦線を出さない）
-        const joinL = this.solids.some(o => o !== s && o.type !== 'oneway' && o.y === s.y && Math.abs(o.x + o.w - s.x) < 2);
-        const joinR = this.solids.some(o => o !== s && o.type !== 'oneway' && o.y === s.y && Math.abs(s.x + s.w - o.x) < 2);
+        const joinL = this.solids.some(o => o !== s && !o.style && o.type !== 'oneway' && o.y === s.y && Math.abs(o.x + o.w - s.x) < 2);
+        const joinR = this.solids.some(o => o !== s && !o.style && o.type !== 'oneway' && o.y === s.y && Math.abs(s.x + s.w - o.x) < 2);
         ctx.fillStyle = 'rgba(20,10,30,.35)'; if (!joinL) ctx.fillRect(x0, y + 10, 3, h); if (!joinR) ctx.fillRect(x0 + s.w - 3, y + 10, 3, h);
       }
       ctx.restore();
@@ -120,6 +125,7 @@ class Terrain {
     const tex = th.texture && IMG[th.texture];
     if (tex && tex.width) return this.drawTextured(ctx, cam, tex, th.onewayTexture && IMG[th.onewayTexture]);
     for (const s of this.solids) {
+      if (s.off || s.style) continue;
       const x = Math.round(s.x - cam), y = Math.round(s.y);
       if (x + s.w < -10 || x > VIEW_W + 10) continue;
       if (s.type === 'oneway') {

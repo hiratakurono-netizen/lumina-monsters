@@ -37,11 +37,11 @@ const ITEM_ICON = { w_knife: ENV.homeec_i_knife, w_pan: ENV.homeec_i_pan, a_apro
   w_dark_dagger: ENV.castle_in_i_dagger, w_king_sword: ENV.castle_in_i_sword };
 
 const RARITIES = [
-  { id: 'common',   name: 'コモン',     color: '#e8e4f0', affixes: 0, mul: 1.00, weight: 60 },
-  { id: 'uncommon', name: 'アンコモン', color: '#7fe08a', affixes: 1, mul: 1.08, weight: 28 },
-  { id: 'rare',     name: 'レア',       color: '#6ab4ff', affixes: 2, mul: 1.18, weight: 10 },
-  { id: 'epic',     name: 'エピック',   color: '#c77dff', affixes: 3, mul: 1.30, weight: 2 },
-  { id: 'legend',   name: 'レジェンド', color: '#ffd36a', affixes: 3, mul: 1.45, weight: 0 },
+  { id: 'common',   name: 'コモン',     color: '#e8e4f0', affixes: 0, mul: BAL.RARITY_MUL[0], weight: 60 },
+  { id: 'uncommon', name: 'アンコモン', color: '#7fe08a', affixes: 1, mul: BAL.RARITY_MUL[1], weight: 28 },
+  { id: 'rare',     name: 'レア',       color: '#6ab4ff', affixes: 2, mul: BAL.RARITY_MUL[2], weight: 10 },
+  { id: 'epic',     name: 'エピック',   color: '#c77dff', affixes: 3, mul: BAL.RARITY_MUL[3], weight: 2 },
+  { id: 'legend',   name: 'レジェンド', color: '#ffd36a', affixes: 3, mul: BAL.RARITY_MUL[4], weight: 0 },
 ];
 const RARITY_BY_ID = Object.fromEntries(RARITIES.map((r, i) => [r.id, Object.assign({ tier: i }, r)]));
 
@@ -49,61 +49,65 @@ const RARITY_BY_ID = Object.fromEntries(RARITIES.map((r, i) => [r.id, Object.ass
 // 基準値＝プロローグの武器の強さ（バット14・椅子20・机30）
 const WEAPON_TYPE_REF = { bat: 14, chair: 20, desk: 30, dagger: 22, sword: 30, axe: 44 };
 
+// 武器は tier（段＝ダンジョン：草原0・砂漠1・雪原2・火山3・魔王城4）と v（同じ段の中での強さ 1.0〜1.3）で威力を決める。
+// atk は読み込み時に BAL.weaponAtk で計算する（下の for 文）。minFloor は出始める「深さ」
 const ITEM_BASES = {
-  // ---- 武器：バット系（小・速い） ----
-  w_bat_wood:   { kind: 'weapon', type: 'bat',   name: '木製バット',     atk: 14, price: 60,  minFloor: 1 },
-  w_bat_pipe:   { kind: 'weapon', type: 'bat',   name: '錆びた鉄パイプ', atk: 16, price: 90,  minFloor: 2 },
-  w_bat_metal:  { kind: 'weapon', type: 'bat',   name: '金属バット',     atk: 19, price: 150, minFloor: 4 },
-  // 家庭科室の道具（本編の草原で出る。チュートリアルでは使わない）
-  w_knife:      { kind: 'weapon', type: 'dagger', name: '家庭科室の包丁', atk: 15, price: 110, minFloor: 2 },
-  w_pan:        { kind: 'weapon', type: 'bat',   name: 'フライパン',     atk: 17, price: 120, minFloor: 3, crit: 4 },
-  w_bat_mop:    { kind: 'weapon', type: 'bat',   name: 'デッキブラシ',   atk: 17, price: 120, minFloor: 3, crit: 5 },
-  // ---- 武器：椅子系（中） ----
-  w_chair_class:{ kind: 'weapon', type: 'chair', name: '教室の椅子',     atk: 20, price: 80,  minFloor: 1 },
-  w_chair_pipe: { kind: 'weapon', type: 'chair', name: 'パイプ椅子',     atk: 23, price: 130, minFloor: 3 },
-  w_chair_stool:{ kind: 'weapon', type: 'chair', name: '音楽室の丸椅子', atk: 26, price: 190, minFloor: 6 },
-  // ---- 武器：机系（大・重い） ----
-  w_desk_class: { kind: 'weapon', type: 'desk',  name: '教室の机',       atk: 30, price: 100, minFloor: 1 },
-  w_desk_teach: { kind: 'weapon', type: 'desk',  name: '教卓',           atk: 36, price: 200, minFloor: 5 },
-  w_desk_lab:   { kind: 'weapon', type: 'desk',  name: '理科室の実験台', atk: 42, price: 300, minFloor: 8 },
-  // ---- 魔界の武器：短剣（4連）・剣（3連）・斧（2連）。振りは手ぶらのモーションに武器のアイコンを重ねる ----
-  // minFloor は「深さ」（草原1〜10・砂漠11〜20・雪原21〜30・火山31〜40）。element は最初から付いている属性
-  w_stone_dagger:   { kind: 'weapon', type: 'dagger',   name: '石の短剣',       atk: 22, price: 260, minFloor: 11 },
-  w_stone_sword:    { kind: 'weapon', type: 'sword', name: '石の剣',         atk: 30, price: 320, minFloor: 13 },
-  w_stone_axe:      { kind: 'weapon', type: 'axe',  name: '石の斧',         atk: 44, price: 400, minFloor: 15, element: 'sand' },
-  w_ice_dagger:     { kind: 'weapon', type: 'dagger',   name: '氷鉄の短剣',     atk: 30, price: 520, minFloor: 21 },
-  w_frost_sword:    { kind: 'weapon', type: 'sword', name: '霜の魔剣',       atk: 42, price: 640, minFloor: 23, element: 'ice' },
-  w_ice_axe:        { kind: 'weapon', type: 'axe',  name: '氷晶の戦斧',     atk: 60, price: 780, minFloor: 25, element: 'ice' },
-  w_obsidian_dagger:{ kind: 'weapon', type: 'dagger',   name: '黒曜石の短剣',   atk: 40, price: 900, minFloor: 31 },
-  w_magma_blade:    { kind: 'weapon', type: 'sword', name: 'マグマブレード', atk: 56, price: 1100, minFloor: 33, element: 'fire' },
-  w_volcano_axe:    { kind: 'weapon', type: 'axe',  name: '火山の斧',       atk: 80, price: 1300, minFloor: 35, element: 'fire' },
-  // 魔王城（深さ41〜50）
-  w_fang_dagger:    { kind: 'weapon', type: 'dagger',   name: '魔王の牙の短剣', atk: 52, price: 1600, minFloor: 41 },
-  w_demon_sword:    { kind: 'weapon', type: 'sword', name: '魔王の魔剣',     atk: 72, price: 1900, minFloor: 43 },
-  w_shatter_axe:    { kind: 'weapon', type: 'axe',  name: '魔王の破砕斧',   atk: 100, price: 2300, minFloor: 45 },
-  w_dark_dagger:    { kind: 'weapon', type: 'dagger',   name: '魔王の暗黒短剣', atk: 60, price: 2400, minFloor: 46 },
-  w_king_sword:     { kind: 'weapon', type: 'sword', name: '魔王の魔王剣',   atk: 84, price: 2800, minFloor: 48 },
-  // ---- 防具（見た目は変わらない） ----
-  a_uniform:    { kind: 'armor', name: '制服',             def: 0,  hp: 0,  price: 0,   minFloor: 99 },
-  a_apron:      { kind: 'armor', name: 'エプロン',         def: 5, hp: 15, price: 100, minFloor: 1 },
-  a_jersey:     { kind: 'armor', name: '学校ジャージ',     def: 6,  hp: 10, price: 120, minFloor: 1 },
-  a_cardigan:   { kind: 'armor', name: 'カーディガン',     def: 10, hp: 0,  price: 160, minFloor: 2 },
-  a_coat:       { kind: 'armor', name: '冬のコート',       def: 16, hp: 20, price: 260, minFloor: 5 },
-  a_cloak:      { kind: 'armor', name: '砂よけの外套',     def: 24, hp: 30, price: 480, minFloor: 12 },
-  a_down:       { kind: 'armor', name: 'ダウンジャケット', def: 34, hp: 50, price: 760, minFloor: 22 },
-  a_fireproof:  { kind: 'armor', name: '耐火の防護服',     def: 46, hp: 70, price: 1100, minFloor: 32 },
-  a_darkmail:   { kind: 'armor', name: '黒鉄の胸当て',     def: 60, hp: 90, price: 1700, minFloor: 42 },
+  // ---- 草原（段0）：学校の道具 ----
+  w_bat_wood:   { kind: 'weapon', type: 'bat',   name: '木製バット',     tier: 0, v: 1.0,  price: 60,  minFloor: 1 },
+  w_bat_pipe:   { kind: 'weapon', type: 'bat',   name: '錆びた鉄パイプ', tier: 0, v: 1.08, price: 90,  minFloor: 2 },
+  w_pan:        { kind: 'weapon', type: 'bat',   name: 'フライパン',     tier: 0, v: 1.1,  price: 120, minFloor: 3, crit: 4 },
+  w_bat_mop:    { kind: 'weapon', type: 'bat',   name: 'デッキブラシ',   tier: 0, v: 1.14, price: 140, minFloor: 4, crit: 5 },
+  w_bat_metal:  { kind: 'weapon', type: 'bat',   name: '金属バット',     tier: 0, v: 1.25, price: 180, minFloor: 6 },
+  w_knife:      { kind: 'weapon', type: 'dagger', name: '家庭科室の包丁', tier: 0, v: 1.05, price: 110, minFloor: 2 },
+  w_chair_class:{ kind: 'weapon', type: 'chair', name: '教室の椅子',     tier: 0, v: 1.0,  price: 80,  minFloor: 1 },
+  w_chair_pipe: { kind: 'weapon', type: 'chair', name: 'パイプ椅子',     tier: 0, v: 1.12, price: 130, minFloor: 3 },
+  w_chair_stool:{ kind: 'weapon', type: 'chair', name: '音楽室の丸椅子', tier: 0, v: 1.25, price: 190, minFloor: 6 },
+  w_desk_class: { kind: 'weapon', type: 'desk',  name: '教室の机',       tier: 0, v: 1.0,  price: 100, minFloor: 1 },
+  w_desk_teach: { kind: 'weapon', type: 'desk',  name: '教卓',           tier: 0, v: 1.14, price: 200, minFloor: 5 },
+  w_desk_lab:   { kind: 'weapon', type: 'desk',  name: '理科室の実験台', tier: 0, v: 1.28, price: 300, minFloor: 8 },
+  // ---- 魔界の武器：短剣（4連）・剣（3連）・斧（2連）。element は最初から付いている属性 ----
+  w_stone_dagger:   { kind: 'weapon', type: 'dagger', name: '石の短剣',       tier: 1, v: 1.0,  price: 260, minFloor: 11 },
+  w_stone_sword:    { kind: 'weapon', type: 'sword',  name: '石の剣',         tier: 1, v: 1.1,  price: 320, minFloor: 12 },
+  w_stone_axe:      { kind: 'weapon', type: 'axe',    name: '石の斧',         tier: 1, v: 1.22, price: 400, minFloor: 14, element: 'sand' },
+  w_ice_dagger:     { kind: 'weapon', type: 'dagger', name: '氷鉄の短剣',     tier: 2, v: 1.0,  price: 520, minFloor: 21 },
+  w_frost_sword:    { kind: 'weapon', type: 'sword',  name: '霜の魔剣',       tier: 2, v: 1.12, price: 640, minFloor: 22, element: 'ice' },
+  w_ice_axe:        { kind: 'weapon', type: 'axe',    name: '氷晶の戦斧',     tier: 2, v: 1.24, price: 780, minFloor: 24, element: 'ice' },
+  w_obsidian_dagger:{ kind: 'weapon', type: 'dagger', name: '黒曜石の短剣',   tier: 3, v: 1.0,  price: 900, minFloor: 31 },
+  w_magma_blade:    { kind: 'weapon', type: 'sword',  name: 'マグマブレード', tier: 3, v: 1.12, price: 1100, minFloor: 32, element: 'fire' },
+  w_volcano_axe:    { kind: 'weapon', type: 'axe',    name: '火山の斧',       tier: 3, v: 1.24, price: 1300, minFloor: 34, element: 'fire' },
+  w_fang_dagger:    { kind: 'weapon', type: 'dagger', name: '魔王の牙の短剣', tier: 4, v: 1.0,  price: 1600, minFloor: 41 },
+  w_demon_sword:    { kind: 'weapon', type: 'sword',  name: '魔王の魔剣',     tier: 4, v: 1.1,  price: 1900, minFloor: 42 },
+  w_shatter_axe:    { kind: 'weapon', type: 'axe',    name: '魔王の破砕斧',   tier: 4, v: 1.22, price: 2300, minFloor: 44 },
+  w_dark_dagger:    { kind: 'weapon', type: 'dagger', name: '魔王の暗黒短剣', tier: 4, v: 1.16, price: 2400, minFloor: 46 },
+  // ---- ボス専用（10階のボスが必ず落とす。ランダムでは出ない） ----
+  w_boss_grass:  { kind: 'weapon', type: 'desk',   name: '巨像の苔石柱',   tier: 0, v: 1.4,  price: 400,  minFloor: 99, boss: 'grassland', element: 'sand' },
+  w_boss_desert: { kind: 'weapon', type: 'axe',    name: '巨人の骨斧',     tier: 1, v: 1.4,  price: 800,  minFloor: 99, boss: 'desert', element: 'sand' },
+  w_boss_snow:   { kind: 'weapon', type: 'sword',  name: '霜竜の牙剣',     tier: 2, v: 1.4,  price: 1400, minFloor: 99, boss: 'snow', element: 'ice' },
+  w_boss_volc:   { kind: 'weapon', type: 'axe',    name: '溶岩巨像の大斧', tier: 3, v: 1.4,  price: 2200, minFloor: 99, boss: 'volcano', element: 'fire' },
+  w_king_sword:  { kind: 'weapon', type: 'sword',  name: '魔王の魔王剣',   tier: 4, v: 1.45, price: 3200, minFloor: 99, boss: 'castle' },
+  // ---- 防具（見た目は変わらない）。防御は被ダメージを 100÷(100＋防御) 倍にする ----
+  a_uniform:    { kind: 'armor', name: '制服',             def: 0,   hp: 0,   price: 0,    minFloor: 99 },
+  a_apron:      { kind: 'armor', name: 'エプロン',         def: 6,   hp: 15,  price: 100,  minFloor: 1 },
+  a_jersey:     { kind: 'armor', name: '学校ジャージ',     def: 8,   hp: 12,  price: 120,  minFloor: 1 },
+  a_cardigan:   { kind: 'armor', name: 'カーディガン',     def: 12,  hp: 10,  price: 160,  minFloor: 3 },
+  a_coat:       { kind: 'armor', name: '冬のコート',       def: 18,  hp: 25,  price: 260,  minFloor: 6 },
+  a_cloak:      { kind: 'armor', name: '砂よけの外套',     def: 32,  hp: 45,  price: 480,  minFloor: 12 },
+  a_down:       { kind: 'armor', name: 'ダウンジャケット', def: 58,  hp: 90,  price: 760,  minFloor: 22 },
+  a_fireproof:  { kind: 'armor', name: '耐火の防護服',     def: 95,  hp: 150, price: 1100, minFloor: 32 },
+  a_darkmail:   { kind: 'armor', name: '黒鉄の胸当て',     def: 145, hp: 220, price: 1700, minFloor: 42 },
   // ---- アクセサリー ----
   c_recipe:     { kind: 'accessory', name: 'レシピ本',     hp: 10, spd: 4, price: 110, minFloor: 2 },
   c_hairpin:    { kind: 'accessory', name: 'ヘアピン',     crit: 4,  price: 90,  minFloor: 1 },
   c_ribbon:     { kind: 'accessory', name: 'リボン',       hp: 15,   price: 90,  minFloor: 1 },
   c_watch:      { kind: 'accessory', name: '腕時計',       spd: 6,   price: 140, minFloor: 3 },
   c_charm:      { kind: 'accessory', name: 'お守り',       def: 6,   price: 140, minFloor: 3 },
-  c_sun:        { kind: 'accessory', name: '太陽のペンダント', hp: 40, def: 6, price: 420, minFloor: 12 },
-  c_snowflake:  { kind: 'accessory', name: '雪の結晶のブローチ', crit: 9, price: 640, minFloor: 22 },
-  c_ember:      { kind: 'accessory', name: '熾火の指輪',     spd: 10, def: 10, price: 900, minFloor: 32 },
-  c_orb:        { kind: 'accessory', name: '魔石のペンダント', hp: 60, crit: 8, price: 1500, minFloor: 44 },
+  c_sun:        { kind: 'accessory', name: '太陽のペンダント', hp: 40, def: 12, price: 420, minFloor: 12 },
+  c_snowflake:  { kind: 'accessory', name: '雪の結晶のブローチ', crit: 9, def: 15, price: 640, minFloor: 22 },
+  c_ember:      { kind: 'accessory', name: '熾火の指輪',     spd: 10, def: 25, price: 900, minFloor: 32 },
+  c_orb:        { kind: 'accessory', name: '魔石のペンダント', hp: 90, crit: 8, def: 35, price: 1500, minFloor: 42 },
 };
+// 武器の威力を段（tier）と v から計算する
+for (const b of Object.values(ITEM_BASES)) if (b.kind === 'weapon') b.atk = BAL.weaponAtk(WEAPON_TYPE_REF[b.type], b.tier, b.v);
 
 // 消耗品（同じ物は個数で重ねる）。use は戦闘中の効果（ダンジョンの段階で使う）
 const CONSUMABLES = {

@@ -20,11 +20,12 @@ const Stats = {
   },
   calc(s) {
     const lv = s.lv || 1;
-    const st = { lv, maxHp: 100 + (lv - 1) * 8, atkPct: 0, aspd: 0, crit: 10, def: 0, move: 0, steal: 0, spcost: 0 };
+    const st = { lv, maxHp: 100 + (lv - 1) * BAL.LV_HP, atkPct: 0, aspd: 0, crit: 10, def: 0, move: 0, steal: 0, spcost: 0 };
     const worn = [s.equip.armor, ...s.equip.acc, ...s.equip.weapons].map(u => (u != null ? Inv.byUid(s, u) : null)).filter(Boolean);
     for (const it of worn) {
       const b = Inv.base(it), isWeapon = b.kind === 'weapon';
-      if (!isWeapon) { st.def += b.def || 0; st.maxHp += b.hp || 0; st.crit += b.crit || 0; st.move += b.spd || 0; }
+      const rm = Inv.rarity(it).mul;   // 防具・アクセもレアリティで防御とHPが上がる
+      if (!isWeapon) { st.def += Math.round((b.def || 0) * rm); st.maxHp += Math.round((b.hp || 0) * rm); st.crit += b.crit || 0; st.move += b.spd || 0; }
       for (const a of it.affixes) {
         if (isWeapon && ['atk', 'aspd', 'crit', 'steal', 'spcost'].includes(a.k)) continue;  // 武器の攻撃系は持っている時だけ（戦闘側で加算）
         if (a.k === 'atk') st.atkPct += a.v; else if (a.k in st) st[a.k] += a.v;

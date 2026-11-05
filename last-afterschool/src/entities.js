@@ -70,8 +70,8 @@ class Player {
   get weapon() { return this.weapons.length ? this.weapons[this.wIdx] : null; }
   weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return (w ? (WEIGHT_SPEED[w.size] || 1) : 1) * (this.stats ? 1 + this.stats.move / 100 : 1) * this.envSlow(); }
   // 環境で遅くなる倍率：深雪の上 0.6、熱中症2段階目以降 0.8
-  envSlow() { return (this.onGround && this.surface === 'snow' ? 0.6 : 1) * ((this.w.heatStage || 0) >= 2 ? 0.8 : 1); }
-  get jumpK() { return Math.sqrt(this.w.ch.jumpMul || 1); }   // 雪原はジャンプの高さが約75%
+  envSlow() { return (this.onGround && this.surface === 'snow' ? 0.6 : 1) * ((this.w.heatStage || 0) >= 2 ? 0.8 : 1) * (this.gimSlow || 1); }
+  get jumpK() { return Math.sqrt(this.w.ch.jumpMul || 1) * (this.gimJump || 1) * (this.onGround && this.surface === 'snow' ? 0.9 : 1); }   // 深雪・流砂でも低くなる   // 雪原はジャンプの高さが約75%
   get element() {
     if (this.fire) return 'fire';
     if (this.tempElT > 0 && !(this.atk && this.atk.key === 'kick')) return this.tempEl;   // たき火などで一時的に付いた属性
@@ -235,7 +235,10 @@ class Player {
     if (this.state === 'attack' || this.state === 'hurt') this.vx *= Math.pow(0.0005, dt);
     if (!(this.state === 'dodge' && !this.onGround)) this.vy += 2100 * dt; // 空中回避中は落ちない
     // 地形との当たり（プロローグは GROUND_Y の平らな床なので、これまでと同じ動きになる）
-    const T = W.terrain, prevX = this.x, prevY = this.y;
+    const T = W.terrain;
+    // 動く床に乗っていたら、床と一緒に運ばれる
+    if (this.onGround) { const rs = T.surfaceAt(this.x, this.y, 12); if (rs && rs.dx) this.x = T.blockX(this.x + rs.dx, this.x, this.y - 120, this.y - 4, 18); }
+    const prevX = this.x, prevY = this.y;
     this.dropT = Math.max(0, (this.dropT || 0) - dt);
     this.x += this.vx * dt;
     this.x = T.blockX(this.x, prevX, this.y - 120, this.y - 4, 18);
@@ -246,7 +249,7 @@ class Player {
       if (!this.onGround && this.vy > 300) W.dust(this.x, g, 4);
       this.y = g; this.vy = 0; this.onGround = true; this.jumps = 0; this.airDodged = false;
       const sf = T.surfaceAt(this.x, g, 12); this.surface = sf && sf.surface || null;
-      this.safe = { x: this.x, y: g };  // 穴に落ちた時に戻る場所
+      if (!sf || !(sf.move || sf.crumble || sf.fragile)) this.safe = { x: this.x, y: g };   // 落ちた時に戻る場所（動く床・崩れる床は除く）  // 穴に落ちた時に戻る場所
     } else if (this.onGround) this.onGround = false;
     const lo = W.camLock ? W.camLock.min + 60 : 30, hi = W.camLock ? W.camLock.max + VIEW_W - 60 : W.ch.length - 30;
     this.x = clamp(this.x, lo, hi);
@@ -289,7 +292,7 @@ class Player {
     this.exp += n;
     let need = expNeed(this.lv);
     while (this.exp >= need) {
-      this.exp -= need; this.lv++; this.maxHp += 8; this.hp = Math.min(this.maxHp, this.hp + Math.round(this.maxHp * 0.1));
+      this.exp -= need; this.lv++; this.maxHp += this.w.ch.dungeon ? BAL.LV_HP : 8; this.hp = Math.min(this.maxHp, this.hp + Math.round(this.maxHp * 0.1));
       Audio2.sfx('lvup'); this.w.floatText(this.x, this.y - 160, 'LEVEL UP!', '#ffe27a', 22); this.setFace('happy', 1.5);
       need = expNeed(this.lv);
     }
@@ -423,7 +426,7 @@ class Enemy {
     if (this.dying > 0) { this.dying -= dt; if (this.dying <= 0) this.dead = true; return; }
     if (this.burn > 0) {
       this.burn -= dt; this.burnTick -= dt;
-      if (this.burnTick <= 0) { this.burnTick = 0.35; this.damage(this.boss ? 4 : 3, null, true); W.spark(this.x + rand(-15, 15), this.y - d.h * 0.6, '#ff9a3a', 3); }
+      if (this.burnTick <= 0) { this.burnTick = 0.35; this.damage(Math.round((this.boss ? 4 : 3) * (W.ch.burnMul || 1)), null, true); W.spark(this.x + rand(-15, 15), this.y - d.h * 0.6, '#ff9a3a', 3); }
     }
     const dir = Math.sign(P.x - this.x) || 1, dist = Math.abs(P.x - this.x);
     // 置かれた敵は、主人公が近づくまで眠っている（ダンジョン）
@@ -434,7 +437,7 @@ class Enemy {
       if (d.fly && !this.launched) this.vy *= Math.pow(0.02, dt);
     } else if (W.state === 'play' && !W.dialogue && !asleep) {
       this.face = dir;
-      AI[d.ai](this, dt, dir, dist, P, W);
+      AI[d.ai](this, dt * (this.agg || 1), dir, dist, P, W);   // 深いダンジョン・強化個体ほど行動が速い
     }
     // physics
     const grav = (d.fly && !this.launched) ? 0 : 1900;
@@ -456,7 +459,7 @@ class Enemy {
     if (this.spawnT <= 0) this.x = clamp(this.x, lo + 40, hi - 40);
     // 接触ダメージ
     const contact = this.contactDmg !== undefined ? this.contactDmg : d.dmg;
-    if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(contact, this.x);
+    if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(contact * (this.dmgK || 1), this.x);
   }
   damage(n, srcX, quiet) {
     if (this.dying > 0) return;
@@ -492,6 +495,11 @@ class Enemy {
     ctx.save();
     ctx.globalAlpha = this.alpha * spawnA * (this.dying > 0 ? this.dying / 0.45 : 1);
     if (this.dying > 0) { sx *= 1 + (0.45 - this.dying); sy *= 1 - (0.45 - this.dying) * 1.5; }
+    if (this.elite && this.dying <= 0) {   // 強化個体：赤金のオーラと★
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const r = d.w * 0.8 + Math.sin(this.t * 6) * 4, cx = this.x - cam, cy = this.y - d.h * 0.5;
+      const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, r); g.addColorStop(0, 'rgba(255,120,60,.45)'); g.addColorStop(1, 'rgba(255,200,80,0)'); ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); ctx.restore();
+      ctx.font = `14px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd36a'; ctx.fillText('★強化', cx, this.y - d.h - 14); ctx.textAlign = 'left';
+    }
     drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot);
     const tele = (this.state === 'tele' || this.state === 'crouch' || this.state === 'howl') && Math.floor(this.t * 12) % 2;
     if (this.flash > 0 || this.dying > 0 || tele) {
@@ -604,7 +612,7 @@ const AI = {
         if (e.next === 'dash') e.face = e.dir;
         if (e.st <= 0) {
           if (e.next === 'summon') {
-            for (const side of [1, -1]) { const m = W.makeEnemy(e.d.minion || 'wolf', side > 0 ? hi : lo, undefined, { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; W.enemies.push(m); }
+            for (const side of [1, -1]) { const m = W.makeEnemy(e.d.minion || 'wolf', side > 0 ? hi : lo, undefined, W.ch.foeScale || { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; W.enemies.push(m); }
             e.state = 'move'; e.cool = 1.5;
           } else { e.state = 'dash'; e.st = 1.6; }
         }
@@ -632,7 +640,7 @@ const AI = {
       for (let i = -2; i <= 2; i++) W.addProj(new DarkOrb(W, e.x, e.y - e.d.h * 0.6, Math.atan2(P.y - 60 - (e.y - e.d.h * 0.6), P.x - e.x) + i * 0.22, 0.5));
       if (!e.called || W.enemies.filter(x => x.type === 'royal_guard').length === 0 && Math.random() < 0.35) {
         e.called = true;
-        for (const side of [1, -1]) { const lo = W.camLock ? W.camLock.min + 90 : 90, hi = W.camLock ? W.camLock.max + VIEW_W - 90 : W.ch.length - 90; const m = W.makeEnemy('royal_guard', side > 0 ? hi : lo, undefined, { hpMul: 2 }); m.vx = -side * 120; W.enemies.push(m); }
+        for (const side of [1, -1]) { const lo = W.camLock ? W.camLock.min + 90 : 90, hi = W.camLock ? W.camLock.max + VIEW_W - 90 : W.ch.length - 90; const m = W.makeEnemy('royal_guard', side > 0 ? hi : lo, undefined, W.ch.foeScale || { hpMul: 2 }); m.vx = -side * 120; W.enemies.push(m); }
       }
       return;
     }
