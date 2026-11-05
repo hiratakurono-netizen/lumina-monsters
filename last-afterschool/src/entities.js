@@ -68,7 +68,10 @@ class Player {
   get item() { return this.wItems ? this.wItems[this.wIdx] || null : null; }   // 今持っている武器の装備データ
   spCost() { return Math.max(5, SPECIAL.mp - (this.item ? this.item.spcost : 0)); }
   get weapon() { return this.weapons.length ? this.weapons[this.wIdx] : null; }
-  weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return (w ? (WEIGHT_SPEED[w.size] || 1) : 1) * (this.stats ? 1 + this.stats.move / 100 : 1); }
+  weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return (w ? (WEIGHT_SPEED[w.size] || 1) : 1) * (this.stats ? 1 + this.stats.move / 100 : 1) * this.envSlow(); }
+  // 環境で遅くなる倍率：深雪の上 0.6、熱中症2段階目以降 0.8
+  envSlow() { return (this.onGround && this.surface === 'snow' ? 0.6 : 1) * ((this.w.heatStage || 0) >= 2 ? 0.8 : 1); }
+  get jumpK() { return Math.sqrt(this.w.ch.jumpMul || 1); }   // 雪原はジャンプの高さが約75%
   get element() {
     if (this.fire) return 'fire';
     if (this.tempElT > 0 && !(this.atk && this.atk.key === 'kick')) return this.tempEl;   // たき火などで一時的に付いた属性
@@ -146,7 +149,7 @@ class Player {
         if (I.hit('attack') || (a.special && a.frame >= def.cancelAt - 1)) a.queued = true;
         if (I.hit('kick') && a.key !== 'kick' && a.frame >= def.cancelAt) { this.startAttack('kick'); return this.physics(dt); }
       }
-      a.ft += dt * 1000 * (this.item && a.key !== 'kick' ? 1 + this.item.aspd / 100 : 1);   // 攻撃速度の付与効果
+      a.ft += dt * 1000 * (this.item && a.key !== 'kick' ? 1 + this.item.aspd / 100 : 1) * ((this.w.heatStage || 0) >= 2 ? 0.8 : 1);   // 攻撃速度の付与効果・熱中症で遅くなる
       if (a.ft >= def.frameMs[a.frame]) {
         a.ft = 0; a.frame++;
         if (a.frame >= def.frameMs.length) {
@@ -175,9 +178,9 @@ class Player {
       if (I.hit('jump') && I.held.down && this.onGround && W.terrain.surfaceAt(this.x, this.y, 12) && W.terrain.surfaceAt(this.x, this.y, 12).type === 'oneway') {
         this.dropT = 0.25; this.onGround = false; this.vy = 60;  // すり抜け床から降りる
       } else if (I.hit('jump')) {
-        if (this.onGround) { this.vy = -780; this.onGround = false; this.jumps = 1; Audio2.sfx('jump'); }
+        if (this.onGround) { this.vy = -780 * this.jumpK; this.onGround = false; this.jumps = 1; Audio2.sfx('jump'); }
         else if (this.jumps < 2) { // 空中2段ジャンプ
-          this.vy = -700; this.jumps = 2; Audio2.sfx('jump');
+          this.vy = -700 * this.jumpK; this.jumps = 2; Audio2.sfx('jump');
           for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; W.fx.push(new Particle({ x: this.x + Math.cos(a) * 18, y: this.y - 10, vx: Math.cos(a) * 160, vy: Math.sin(a) * 50, drag: 0.02, life: 0.35, size: 4, color: '#e6dcff', add: true })); }
         }
       }
@@ -206,7 +209,9 @@ class Player {
     }
     const run = control && I.dash && move !== 0 && !this.guarding;
     const speed = (this.guarding ? 110 : run ? 340 : 190) * this.weightSpeed();
-    this.vx = move * speed;
+    // 氷の上は滑る（ゆっくり加速・ゆっくり止まる）
+    if (this.onGround && this.surface === 'ice') this.vx += (move * speed - this.vx) * Math.min(1, dt * 2.2);
+    else this.vx = move * speed;
     if (move) this.face = move;
     // 待機・ガード中は武器を構えたポーズ（振りの1コマ目）。歩き・走りは武器をしまう
     const ready = this.weapon && SPRITE_DATA.swing[this.weapon] ? `swing_${this.weapon}` : null;
@@ -240,6 +245,7 @@ class Player {
     if (this.vy >= 0 && this.y >= g) {
       if (!this.onGround && this.vy > 300) W.dust(this.x, g, 4);
       this.y = g; this.vy = 0; this.onGround = true; this.jumps = 0; this.airDodged = false;
+      const sf = T.surfaceAt(this.x, g, 12); this.surface = sf && sf.surface || null;
       this.safe = { x: this.x, y: g };  // 穴に落ちた時に戻る場所
     } else if (this.onGround) this.onGround = false;
     const lo = W.camLock ? W.camLock.min + 60 : 30, hi = W.camLock ? W.camLock.max + VIEW_W - 60 : W.ch.length - 30;
@@ -257,6 +263,7 @@ class Player {
   }
   hurt(dmg, fromX) {
     if (this.inv > 0 || this.w.state !== 'play') return false;
+    if (this.w.ch.dmgMul) dmg = Math.round(dmg * this.w.ch.dmgMul);   // 深いダンジョンほど敵の攻撃が痛い
     if (this.stats && this.stats.def) dmg = Math.max(1, Math.round(dmg * 100 / (100 + this.stats.def)));   // 防御
     // ガード：正面からの攻撃はダメージ30%・ノックバックなし
     if (this.guarding && (fromX - this.x) * this.face > 0) {
@@ -418,7 +425,8 @@ class Enemy {
     const T = W.terrain, prevX = this.x, prevY = this.y;
     // 足場の端から落ちないように止まる（飛ばされた時は落ちる）
     if (!d.fly && !d.boss && this.onGround && !this.launched && this.vx && this.vy >= 0) { const g = T.groundBelow(this.x + Math.sign(this.vx) * (d.w / 2 + 6), this.y - 2, 0); if (g > this.y + 40) this.vx = 0; }
-    this.vy += grav * dt; this.x += this.vx * dt; this.y += this.vy * dt;
+    let slow = 1; if (this.chill > 0) { this.chill -= dt; slow = this.d.boss ? 0.75 : 0.5; if (Math.random() < 0.2) W.spark(this.x, this.y - this.d.h * 0.5, '#bfe9ff', 1); }   // 氷で凍えると動きが鈍る
+    this.vy += grav * dt; this.x += this.vx * dt * slow; this.y += this.vy * dt;
     if (!d.fly) this.x = T.blockX(this.x, prevX, this.y - d.h, this.y - 4, d.w / 2);
     const gnd = T.groundBelow(this.x, prevY, 0, !!d.boss);   // ボスはすり抜け床に乗らない（大きな体で足場に引っかからないように）
     const floor = d.fly && !this.launched ? Math.min(gnd, GROUND_Y) - 20 : gnd;
@@ -432,11 +440,11 @@ class Enemy {
     if (this.spawnT <= 0) this.x = clamp(this.x, lo + 40, hi - 40);
     // 接触ダメージ
     const contact = this.contactDmg !== undefined ? this.contactDmg : d.dmg;
-    if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(Math.round(contact * (this.dmgMul || 1)), this.x);
+    if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(contact, this.x);
   }
   damage(n, srcX, quiet) {
     if (this.dying > 0) return;
-    if (this.d.moss && this.moss > 0) n = Math.max(1, Math.round(n * 0.5));   // 苔の鎧：ダメージ半減
+    if (this.d.moss && this.moss > 0) n = Math.max(1, Math.round(n * 0.5));   // 鎧（苔・氷・溶岩）：ダメージ半減
     this.hp -= n; this.flash = 0.08;
     if (!quiet) this.w.floatText(this.x + rand(-12, 12), this.y - this.d.h - 10, String(Math.round(n)), n >= 40 ? '#ffd36a' : '#ffffff', n >= 40 ? 22 : 16);
     if (this.hp <= 0) this.w.killEnemy(this);
@@ -474,7 +482,7 @@ class Enemy {
       ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.7;
       drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot);
     }
-    if (d.moss && this.moss > 0) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.45 * this.moss; ctx.filter = 'hue-rotate(70deg) saturate(1.6)'; drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot); ctx.filter = 'none'; }
+    if (d.moss && this.moss > 0) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.45 * this.moss; ctx.filter = d.moss.filter || 'none'; drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot); ctx.filter = 'none'; }
     if (this.rage) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.18 + Math.sin(this.t * 8) * 0.08; drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy); }
     ctx.restore();
     if (this.burn > 0 && Math.random() < 0.5) this.w.spark(this.x + rand(-d.w / 3, d.w / 3), this.y - rand(0, d.h), '#ff8a3a', 1, -80);
@@ -601,12 +609,12 @@ const AI = {
   },
   // 苔むした巨像：巨像の攻撃（叩きつけ・突進・岩）に加えて、足元からツタを生やす
   golemMoss(e, dt, dir, dist, P, W) {
-    if (e.moss === undefined) e.moss = 1;
+    if (e.moss === undefined) e.moss = e.d.moss ? 1 : 0;
     e.vineCD = (e.vineCD === undefined ? 4 : e.vineCD) - dt;
     if (e.state === 'move' && e.vineCD <= 0) {
       e.vineCD = e.rage ? 4.5 : 6.5; Audio2.sfx('warn');
       const n = e.rage ? 3 : 2;
-      for (let i = 0; i < n; i++) W.addProj(new Vine(W, P.x + (i - (n - 1) / 2) * 110, 0.9 + i * 0.25));
+      for (let i = 0; i < n; i++) W.addProj(new Vine(W, P.x + (i - (n - 1) / 2) * 110, 0.9 + i * 0.25, e.d.vine));
       e.state = 'recover'; e.st = 1.2; e.vx = 0;
       return;
     }
@@ -670,19 +678,26 @@ const AI = {
 //  Projectiles
 // =====================================================================
 // ツタ：地面に予兆（緑の光）→ 0.4秒だけ地面から突き出す
+// ボスが地面から突き出させる物の色（草原＝ツタ・砂漠＝砂の槍・雪原＝氷柱・火山＝溶岩）
+const VINE_COLORS = {
+  grass: { warn: 'rgba(120,230,120,A)', dark: '#3e6b48', light: '#7fb069' },
+  sand: { warn: 'rgba(240,200,120,A)', dark: '#a8763c', light: '#e8c98a' },
+  ice: { warn: 'rgba(160,220,255,A)', dark: '#5a8fc0', light: '#dff4ff' },
+  lava: { warn: 'rgba(255,120,60,A)', dark: '#7a2a14', light: '#ffb35a' },
+};
 class Vine {
-  constructor(w, x, delay) { this.w = w; this.x = x; this.t = -delay; this.dead = false; this.hit = false; this.gy = w.terrain.groundBelow(x, 0, 0); if (this.gy === Infinity) this.dead = true; }
+  constructor(w, x, delay, kind = 'grass') { this.w = w; this.x = x; this.t = -delay; this.c = VINE_COLORS[kind] || VINE_COLORS.grass; this.dead = false; this.hit = false; this.gy = w.terrain.groundBelow(x, 0, 0); if (this.gy === Infinity) this.dead = true; }
   update(dt) {
     this.t += dt; if (this.t > 0.45) this.dead = true;
     if (this.t >= 0 && !this.hit && overlap([this.x - 26, this.gy - 120, this.x + 26, this.gy], this.w.player.box())) { if (this.w.player.hurt(11, this.x)) this.hit = true; }
-    if (this.t >= 0 && this.t < dt * 1.5) { this.w.dust(this.x, this.gy, 6, '#6fa06a'); this.w.shake = Math.max(this.w.shake, 4); Audio2.sfx('kick'); }
+    if (this.t >= 0 && this.t < dt * 1.5) { this.w.dust(this.x, this.gy, 6, this.c.light); this.w.shake = Math.max(this.w.shake, 4); Audio2.sfx('kick'); }
   }
   draw(ctx, cam) {
     const x = this.x - cam;
-    if (this.t < 0) { const a = 0.3 + 0.3 * Math.sin(this.t * 30); ctx.fillStyle = `rgba(120,230,120,${a})`; ctx.fillRect(x - 30, this.gy - 6, 60, 6); return; }
+    if (this.t < 0) { const a = 0.3 + 0.3 * Math.sin(this.t * 30); ctx.fillStyle = this.c.warn.replace('A', a); ctx.fillRect(x - 30, this.gy - 6, 60, 6); return; }
     const h = 120 * Math.min(1, this.t / 0.08) * (this.t > 0.3 ? 1 - (this.t - 0.3) / 0.15 : 1);
-    ctx.fillStyle = '#3e6b48'; ctx.beginPath(); ctx.moveTo(x - 22, this.gy); ctx.lineTo(x - 4, this.gy - h); ctx.lineTo(x + 6, this.gy - h * 0.7); ctx.lineTo(x + 22, this.gy); ctx.fill();
-    ctx.fillStyle = '#7fb069'; ctx.fillRect(x - 3, this.gy - h, 5, h * 0.9);
+    ctx.fillStyle = this.c.dark; ctx.beginPath(); ctx.moveTo(x - 22, this.gy); ctx.lineTo(x - 4, this.gy - h); ctx.lineTo(x + 6, this.gy - h * 0.7); ctx.lineTo(x + 22, this.gy); ctx.fill();
+    ctx.fillStyle = this.c.light; ctx.fillRect(x - 3, this.gy - h, 5, h * 0.9);
   }
 }
 class Spore {

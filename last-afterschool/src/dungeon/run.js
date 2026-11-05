@@ -11,11 +11,12 @@ const DungeonFlow = {
     if (!DUNGEONS[id]) { UI.toast('このダンジョンはまだ実装されていません'); return; }
     if (!this.save.equip.weapons.some(u => u != null)) { UI.toast('武器を1つ以上装備してください（自宅）'); return; }
     UI.close();
-    this.run = { id, floor: startFloor, startFloor, gained: 0, seedBase: (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0, hp: null, mp: 10 };
+    this.run = { id, floor: startFloor, startFloor, gained: 0, seedBase: (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0, hp: null, mp: 10, water: 100, heat: 0 };   // 水分は潜入のはじめに満タン
     this.transition(() => this.startFloor());
   },
   startFloor() {
     const ch = DungeonGen.build(this.run); ch.dungeonId = this.run.id;
+    if (DUNGEONS[this.run.id].timeLimit) this.run.timeLeft = DUNGEONS[this.run.id].timeLimit;   // 火山：階ごとに制限時間
     this.world = new World(ch, this.save, this);
     const d = this.dg(); d.best = Math.max(d.best || 0, this.run.floor); Save.store(this.save);
     this.card = { t: 0 }; this.scene = 'card'; this.fade = 1;
@@ -65,6 +66,8 @@ const DungeonFlow = {
       const rows = [
         ['milk', `HP +40（今 ${Math.ceil(P.hp)} / ${P.maxHp}）`, use('milk', () => { P.hp = Math.min(P.maxHp, P.hp + 40); W.floatText(P.x, P.y - 130, 'HP +40', '#8fe0a0', 16); })],
         ['bento', 'HPを全回復', use('bento', () => { P.hp = P.maxHp; W.floatText(P.x, P.y - 130, 'HP 全回復', '#8fe0a0', 16); })],
+        ['water', this.world.ch.env === 'heat' ? `水分を満タンに（今 ${Math.round(this.run.water)}%）` : '砂漠で水分を回復する', () => { if (!Inv.useItem(s, 'water')) return; this.run.water = 100; this.run.heat = 0; Save.store(s); Audio2.sfx('heal'); W.floatText(P.x, P.y - 130, '水分 100%', '#9fe0ff', 16); UI.render(); }],
+        ['cooler', this.world.ch.env === 'lava' ? `残り時間を30秒のばす（今 ${Math.ceil(this.run.timeLeft)}秒）` : '火山の残り時間をのばす', () => { if (!Inv.useItem(s, 'cooler')) return; if (this.run.timeLeft != null) this.run.timeLeft += 30; Save.store(s); Audio2.sfx('heal'); W.floatText(P.x, P.y - 130, '+30秒', '#9fe0ff', 16); UI.render(); }],
         ['power', this.run.power ? '使用中（攻撃力 +20%）' : 'この潜入の間、攻撃力 +20%', () => { if (this.run.power || !Inv.useItem(s, 'power')) return; this.run.power = true; P.stats.atkPct += 20; Save.store(s); Audio2.sfx('lvup'); W.floatText(P.x, P.y - 130, '攻撃力 +20%', '#ffb35a', 16); UI.render(); }],
         ['bell', '町へ帰る（ゴールドは失わない）', () => { if (!Inv.useItem(s, 'bell')) return; this.keepHero(W); UI.close(); this.returnToTown([L('sys', '帰還の鈴が鳴り、町へ戻った。')]); }],
       ];

@@ -94,6 +94,7 @@ const ELEMENTS = {
   none: { color: '#c9a2ff', glow: '#7b52ff', name: '' },
   sand: { color: '#e8d09a', glow: '#b08a46', name: '砂' },
   fire: { color: '#ffb35a', glow: '#ff5a1f', name: '炎' },
+  ice:  { color: '#bfe9ff', glow: '#4a9fff', name: '氷' },   // 敵を凍えさせる（ひるみ・足止めが長い）
 };
 
 // ---------------------------------------------------------------------

@@ -73,7 +73,7 @@ class World {
     this.updateFx(dt);
 
     this.comboT -= dt; if (this.comboT <= 0) this.combo = 0;
-    if (this.player.mp < this.player.maxMp) this.player.mp = Math.min(this.player.maxMp, this.player.mp + dt * 0.6);
+    if (this.player.mp < this.player.maxMp && !(this.heatStage >= 1)) this.player.mp = Math.min(this.player.maxMp, this.player.mp + dt * 0.6);   // 熱中症の間は MP が回復しない
 
     // camera
     let target = P.x - VIEW_W * 0.42;
@@ -209,11 +209,12 @@ class World {
       if (e.boss) {
         e.poise += dmg;
         if (e.poise > 170 && (e.state === 'move' || e.state === 'recover')) { e.poise = 0; e.state = 'stagger'; e.st = 1.1; e.vx = P.face * 160; this.floatText(e.x, e.y - 230, 'BREAK!', '#9fe0ff', 24); if (e.moss > 0) this.stripMoss(e, 0.35); }
-        if (e.moss > 0 && el === 'fire') this.stripMoss(e, atk.special ? 0.3 : 0.1);   // 炎で苔が焼ける
+        if (e.moss > 0 && el === e.d.moss.el) this.stripMoss(e, atk.special ? 0.3 : 0.1);   // 苔・氷の鎧は炎、溶岩の鎧は氷ではがれる
       } else {
         e.vx = (Math.sign(e.x - P.x) || P.face) * (h.kb || 150) * (atk.special ? 1.4 : 1); // 主人公から離れる向きに飛ばす
         if (h.launch) { e.vy = -h.launch; e.launched = true; e.onGround = false; }
-        e.stun = 0.35 + (el === 'sand' ? 0.3 : 0) + (h.launch ? 0.3 : 0);
+        e.stun = 0.35 + (el === 'sand' ? 0.3 : 0) + (el === 'ice' ? 0.5 : 0) + (h.launch ? 0.3 : 0);   // 氷：凍えて長く止まる
+        if (el === 'ice') e.chill = 2.5;
         e.state = 'move';
       }
       if (el === 'fire') e.burn = 2.2;
@@ -244,13 +245,14 @@ class World {
     if (e.dying > 0) return;
     e.dying = e.boss ? 2.2 : 0.45; e.vx = 0; Audio2.sfx('die');
     this.spark(e.x, e.y - e.d.h / 2, '#e8d8ff', 14);
-    const fl = this.ch.dungeon ? this.ch.floor : 1;
+    const fl = this.ch.dungeon ? this.ch.depth || this.ch.floor : 1;   // 深さ（草原1〜10・砂漠11〜20…）
     this.player.gainExp(Math.round(e.d.exp * (1 + 0.15 * (fl - 1))));
+    if (this.ch.env === 'lava' && this.game.run) this.game.run.timeLeft = Math.min(this.game.run.timeLeft + (e.boss ? 60 : 2), 999);   // 火山：倒すと少し時間がのびる
     if (this.ch.dungeon) {
       this.dropGold(e.x, e.y - 30, Math.round((3 + fl * 2) * (e.boss ? 15 : 1) * rand(0.7, 1.3)));
       // 装備のドロップ：ボスは確定、通常の敵はまれに
       const rng = makeRng((Math.random() * 4294967296) >>> 0), save = this.game.save;
-      if (e.boss) { const B = LOOT.BOSS[fl] || { n: 1, minTier: 1 }; for (let i = 0; i < B.n; i++) this.dropItem(e.x + (i - 0.5) * 60, e.y - 60, LOOT.roll(save, rng, fl, B)); }
+      if (e.boss) { const B = LOOT.BOSS[this.ch.floor] || { n: 1, minTier: 1 }; for (let i = 0; i < B.n; i++) this.dropItem(e.x + (i - 0.5) * 60, e.y - 60, LOOT.roll(save, rng, fl, B)); }
       else if (rng.chance(LOOT.ENEMY_ITEM_CHANCE)) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl));
     }
     if (!e.boss && Math.random() < 0.13) this.pickups.push({ x: e.x, y: e.y - 40, vy: -260, t: 0, kind: 'milk' });
@@ -302,7 +304,7 @@ class World {
   stripMoss(e, n) {
     e.moss = Math.max(0, e.moss - n);
     this.spark(e.x, e.y - e.d.h * 0.6, '#7fe08a', 10);
-    if (e.moss <= 0) { this.floatText(e.x, e.y - e.d.h - 40, '苔の鎧がはがれた！', '#8fe0a0', 22); Audio2.sfx('lvup'); this.shake = 10; }
+    if (e.moss <= 0) { this.floatText(e.x, e.y - e.d.h - 40, `${e.d.moss.name}がはがれた！`, '#8fe0a0', 22); Audio2.sfx('lvup'); this.shake = 10; }
   }
   // ---- 環境オブジェクト ----
   updateObjs(dt) {
@@ -316,17 +318,44 @@ class World {
         P.tempEl = 'fire'; P.tempElT = 30;
         if (fresh) { Audio2.sfx('fire'); Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '武器に炎が宿った！（30秒）', '#ffb35a', 16); this.spark(P.x, P.y - 60, '#ff9a3a', 18); }
       }
-      if (o.kind === 'mushroom' && P.onGround && Math.abs(P.x - o.x) < 30 && Math.abs(P.y - o.y) < 3 && this.state === 'play') {
+      if (this.state === 'play') this.envObj(o, P, near);
+      if ((o.kind === 'mushroom' || o.kind === 'geyser') && P.onGround && Math.abs(P.x - o.x) < 30 && Math.abs(P.y - o.y) < 3 && this.state === 'play') {
         P.vy = -1100; P.onGround = false; P.jumps = 1; o.squash = 0.25; Audio2.sfx('jump'); this.dust(o.x, o.y, 4, '#ffb0c8');
       }
       if (o.squash > 0) o.squash -= dt;
       if (o.kind === 'campfire' && Math.random() < 0.5) this.fx.push(new Particle({ x: o.x + rand(-10, 10), y: o.y - 18, vx: rand(-15, 15), vy: rand(-90, -40), life: 0.6, size: 3, color: Math.random() < 0.5 ? '#ffb35a' : '#ff6a2a', add: true }));
     }
   }
+  // 砂漠・雪原・火山の環境オブジェクトに触れた時
+  envObj(o, P, near) {
+    const run = this.game.run;
+    if (o.kind === 'cactus' && near && o.cd <= 0) { o.cd = 1; P.hurt(4, o.x); }   // とげ
+    if (o.kind === 'lavapit' && Math.abs(P.x - o.x) < 34 && P.onGround && Math.abs(P.y - o.y) < 4 && o.cd <= 0) { o.cd = 0.8; P.hurt(10, o.x); this.spark(P.x, P.y, '#ff7a2a', 10); }
+    if (o.kind === 'oasis' && near && !o.used && run) {
+      o.used = true; run.water = 100; run.heat = 0; P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.2);
+      Audio2.sfx('heal'); this.floatText(P.x, P.y - 160, 'オアシスの水で生き返る！', '#9fe0ff', 16);
+    }
+    if (o.kind === 'icecrystal' && near && o.cd <= 0 && !(P.tempElT > 0 && P.tempEl === 'ice')) {
+      o.cd = 1; P.tempEl = 'ice'; P.tempElT = 30; Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '武器に氷が宿った！（30秒）', ELEMENTS.ice.color, 16);
+    }
+    if (o.kind === 'frostvent' && near && !o.used) {
+      o.used = true; P.tempEl = 'ice'; P.tempElT = 30; if (run && this.ch.env === 'lava') run.timeLeft += 15;
+      Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '冷気をまとった！ 氷属性＋15秒', ELEMENTS.ice.color, 16);
+    }
+  }
   // 攻撃で草むらを壊す
   hitObjs(box) {
     for (const o of this.objs) {
-      if (o.dead || o.kind !== 'bush') continue;
+      if (o.dead) continue;
+      if ((o.kind === 'cactus' || o.kind === 'icecrystal') && overlap(box, [o.x - 26, o.y - 70, o.x + 26, o.y]) && o.cd <= 0) {
+        // サボテンを叩く→砂属性、氷晶を叩く→氷属性（30秒）
+        const P = this.player, el = o.kind === 'cactus' ? 'sand' : 'ice', fresh = !(P.tempElT > 0 && P.tempEl === el);
+        P.tempEl = el; P.tempElT = 30; o.cd = 1;
+        this.spark(o.x, o.y - 40, ELEMENTS[el].color, 14); Audio2.sfx('kick');
+        if (fresh) { Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, `武器に${ELEMENTS[el].name}が宿った！（30秒）`, ELEMENTS[el].color, 16); }
+        continue;
+      }
+      if (o.kind !== 'bush') continue;
       if (!overlap(box, [o.x - 26, o.y - 40, o.x + 26, o.y])) continue;
       o.dead = true; Audio2.sfx('kick'); this.dust(o.x, o.y - 10, 10, '#6fa06a');
       if (Math.random() < 0.3) this.pickups.push({ kind: 'milk', x: o.x, y: o.y - 30, vy: -300, t: 0 });
@@ -353,11 +382,52 @@ class World {
       } else if (o.kind === 'bush') {
         ctx.fillStyle = '#4f7f52'; for (const [a, b, r] of [[-14, -14, 16], [12, -14, 15], [0, -24, 16]]) { ctx.beginPath(); ctx.arc(x + a, y + b, r, 0, 7); ctx.fill(); }
         ctx.fillStyle = '#6fa06a'; for (const [a, b] of [[-10, -22], [8, -26], [16, -12]]) R('#8fca7a', a, b, 4, 4);
+      } else if (o.kind === 'deco' || o.kind === 'cactus' || o.kind === 'oasis' || o.kind === 'icecrystal' || o.kind === 'lavapit') {
+        const key = o.kind === 'deco' ? o.img : { cactus: 'desert_cactus', oasis: 'desert_palm', icecrystal: 'snow_ice', lavapit: 'volcano_lavapit' }[o.kind];
+        const sc = o.s || { cactus: 0.75, oasis: 1.0, icecrystal: 0.9, lavapit: 0.9 }[o.kind], im = IMG[ENV[key]];
+        if (o.kind === 'oasis') { ctx.fillStyle = 'rgba(90,190,230,.85)'; ctx.beginPath(); ctx.ellipse(x, y - 3, 46, 7, 0, 0, 7); ctx.fill(); ctx.fillStyle = 'rgba(220,250,255,.7)'; ctx.fillRect(x - 20, y - 6, 14, 2); }
+        if (o.kind === 'icecrystal' || o.kind === 'frostvent') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.3 + Math.sin(o.t * 3) * 0.1; ctx.fillStyle = '#9fe0ff'; ctx.beginPath(); ctx.arc(x, y - 26, 34, 0, 7); ctx.fill(); ctx.restore(); }
+        if (im && im.width) ctx.drawImage(im, Math.round(x - im.width * sc / 2), Math.round(y - im.height * sc + (o.kind === 'lavapit' ? im.height * sc * 0.55 : 2)), im.width * sc, im.height * sc);
+        if (o.kind === 'oasis' && o.used) { ctx.globalAlpha = 0.6; ctx.fillStyle = '#c9a77e'; ctx.fillRect(x - 46, y - 6, 92, 6); ctx.globalAlpha = 1; }
+      } else if (o.kind === 'frostvent') {   // 冷気の噴出口（火山）
+        R('#3a3a48', -22, -10, 44, 10); R('#5a6a80', -16, -14, 32, 5);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = o.used ? 0.25 : 0.55;
+        for (let i = 0; i < 5; i++) { const k = (o.t * 0.8 + i / 5) % 1; ctx.fillStyle = '#bfe9ff'; ctx.beginPath(); ctx.arc(x + Math.sin(i * 2 + o.t) * 8, y - 14 - k * 70, 6 + k * 10, 0, 7); ctx.fill(); }
+        ctx.restore();
+        if (Math.abs(this.player.x - o.x) < 160 && !o.used) { ctx.font = `12px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#bfe9ff'; ctx.fillText('ふれると冷気', x, y - 96); ctx.textAlign = 'left'; }
+      } else if (o.kind === 'geyser') {   // 間欠泉（乗ると高く跳ぶ）
+        R('#4a3a3a', -24, -6, 48, 6);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35 + (o.squash > 0 ? 0.4 : 0);
+        for (let i = 0; i < 4; i++) { const k = (o.t * 1.2 + i / 4) % 1; ctx.fillStyle = '#e8f4ff'; ctx.beginPath(); ctx.arc(x + Math.sin(i * 3 + o.t * 2) * 6, y - 8 - k * (o.squash > 0 ? 140 : 40), 5 + k * 6, 0, 7); ctx.fill(); }
+        ctx.restore();
       } else if (o.kind === 'mushroom') {
         const sq = o.squash > 0 ? 0.7 : 1;
         R('#f2e6d8', -6, -18 * sq, 12, 18 * sq);
         ctx.fillStyle = '#e05a8a'; ctx.beginPath(); ctx.ellipse(x, y - 18 * sq, 26, 14 * sq, 0, Math.PI, 0); ctx.fill();
         R('#fff', -14, -26 * sq, 6, 5); R('#fff', 6, -28 * sq, 5, 4);
+      }
+    }
+  }
+  // 環境のルール：砂漠＝水分と熱中症、火山＝制限時間
+  updateEnv(dt) {
+    const run = this.game.run, P = this.player;
+    if (!run || this.state !== 'play' || this.dialogue || UI.isOpen) return;
+    if (this.ch.env === 'heat') {
+      const busy = P.state === 'attack' || (Input.dash && Math.abs(P.vx) > 200);
+      run.water = Math.max(0, run.water - dt * (100 / 120) * (busy ? 1.6 : 1));   // 水1本で約2分
+      if (run.water <= 0) run.heat += dt; else run.heat = Math.max(0, run.heat - dt * 2);
+      const st = run.water > 0 ? 0 : run.heat < 20 ? 1 : run.heat < 40 ? 2 : 3;
+      if (st > (this.heatStage || 0)) { Audio2.sfx('warn'); this.floatText(P.x, P.y - 170, ['', '熱中症（MPが回復しない）', '熱中症（動きが鈍る）', '熱中症（HPが減っていく）'][st], '#ff9a6a', 16); }
+      this.heatStage = st;
+      if (st >= 3) { P.hp -= P.maxHp * 0.015 * dt; if (P.hp <= 0) { P.hp = 0; this.onPlayerDown(); } }
+      if (run.water < 25 && !run.warned) { run.warned = true; this.floatText(P.x, P.y - 170, '喉が渇いてきた…（道具から水）', '#9fe0ff', 15); }
+      if (run.water >= 25) run.warned = false;
+    }
+    if (this.ch.env === 'lava') {
+      run.timeLeft = Math.max(0, run.timeLeft - dt);
+      if (run.timeLeft <= 0) {   // 時間切れ：熱でHPが大きく減り続ける
+        P.hp -= P.maxHp * 0.04 * dt; if (Math.random() < 0.3) this.spark(P.x, P.y - 60, '#ff7a2a', 2);
+        if (P.hp <= 0) { P.hp = 0; this.onPlayerDown(); }
       }
     }
   }
@@ -376,6 +446,7 @@ class World {
   }
   updateDungeon(dt) {
     const P = this.player;
+    this.updateEnv(dt);
     for (const c of this.chests) {
       c.t += dt;
       if (c.opened || this.state !== 'play') continue;
@@ -444,6 +515,8 @@ class World {
     if (k === 'ember') P({ x, y: GROUND_Y + 10, vx: rand(-20, 20), vy: rand(-80, -30), color: '#ffb070', add: true, size: 2, life: 4 });
     if (k === 'dust' && Math.random() < 0.4) P({ x, y: rand(60, 400), vx: rand(-8, 8), vy: rand(-6, 6), color: 'rgba(255,240,220,.6)', size: 2, life: 3 });
     if (k === 'steam' && Math.random() < 0.3) P({ x, y: 300, vx: rand(-10, 10), vy: rand(-40, -20), color: 'rgba(230,230,240,.35)', size: 8, life: 2 });
+    if (k === 'snowfall') P({ x, y: -10, vx: rand(-30, 10), vy: rand(40, 90), color: '#f4fbff', size: Math.random() < 0.3 ? 4 : 2 });
+    if (k === 'sand' && Math.random() < 0.5) P({ x: this.camX + VIEW_W + 20, y: rand(200, 460), vx: rand(-260, -160), vy: rand(-10, 10), color: 'rgba(240,210,150,.55)', size: 2, life: 3 });
     if (k === 'mote' && Math.random() < 0.5) P({ x, y: rand(80, 420), vx: rand(-10, 10), vy: rand(-20, -5), color: '#fff2c8', add: true, size: 2, life: 4 });
   }
 

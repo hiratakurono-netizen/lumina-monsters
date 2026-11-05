@@ -15,7 +15,8 @@ const BL = (x, y, w, h) => ({ x, y, w, h });                                 // 
 
 const DUNGEONS = {
   grassland: {
-    name: '草原', bg: 'grassland', bgm: 'battle', bossBgm: 'boss', jumpMul: 1,
+    name: '草原', tier: 0, bg: 'grassland', bgm: 'battle', bossBgm: 'boss', jumpMul: 1,
+    decor: [{ img: 'flowers', s: 0.7 }],   // 飾り（触れても何も起きない）
     terrainTheme: { texture: ENV.ground_grass, top: '#7fb069', side: '#5b4a5e', dark: '#463a4c', edge: '#b9e08f', oneway: '#8a6e5a', onewayTop: '#c9a77e' },
     // 階ごとの敵の出現表（重み）。深い階ほど種類が増える
     foes(floor) {
@@ -55,5 +56,78 @@ Object.assign(ENEMIES, {
   wolf:      { spr: 'wolf', scale: 0.85, hp: 44, dmg: 10, speed: 150, ai: 'lunge', w: 70, h: 70, exp: 10 },
   wolf_boss: { spr: 'wolf_l', scale: 1.05, hp: 520, dmg: 12, speed: 170, ai: 'wolfBoss', w: 140, h: 140, exp: 80, boss: true, name: '草原の主 オオカミ（仮）' },
   // 苔の鎧（moss）：ダメージ半減。炎の攻撃か BREAK ではがれる。ボス部屋の左端にたき火がある
-  golem_moss:{ spr: 'golem', scale: 1.15, hp: 1200, dmg: 13, speed: 70, ai: 'golemMoss', moss: true, w: 170, h: 185, exp: 200, boss: true, name: '苔むした巨像（仮）' },
+  golem_moss:{ spr: 'golem', scale: 1.15, hp: 1200, dmg: 13, speed: 70, ai: 'golemMoss', moss: { el: 'fire', name: '苔の鎧', filter: 'hue-rotate(70deg) saturate(1.6)' }, vine: 'grass', w: 170, h: 185, exp: 200, boss: true, name: '苔むした巨像（仮）' },
+});
+
+// =====================================================================
+//  砂漠・雪原・火山（部屋の形は草原と同じパーツを使い、置く物と環境のルールを変える）
+//  env: heat（水分ゲージ・熱中症） / cold（ジャンプ力低下・氷と深雪の床） / lava（制限時間・溶岩）
+// =====================================================================
+// 草原の部屋パーツを写して、置く物の種類を差し替える。map: 草原の種類 → このダンジョンの種類（null で置かない）
+function biomeChunks(map, extra = {}) {
+  const out = JSON.parse(JSON.stringify(DUNGEONS.grassland.chunks));
+  for (const [k, c] of Object.entries(out)) {
+    c.objs = (c.objs || []).map(o => (map[o.kind] === undefined ? o : map[o.kind] && Object.assign(o, { kind: map[o.kind] }))).filter(Boolean);
+    if (extra[k]) c.objs.push(...extra[k]);
+  }
+  return out;
+}
+Object.assign(DUNGEONS, {
+  desert: {
+    name: '砂漠', tier: 1, bg: 'desert', bgm: 'battle', bossBgm: 'boss', jumpMul: 1, env: 'heat',
+    terrainTheme: { texture: ENV.desert_ground, onewayTexture: ENV.desert_oneway },
+    decor: [{ img: 'desert_cactus3', s: 0.9 }, { img: 'desert_skull', s: 0.7 }, { img: 'desert_block', s: 0.8 }, { img: 'desert_cactus2', s: 0.9 }],
+    foes(f) { const t = [['scorpion', 5], ['skel', 4], ['skullfire', 3]]; if (f >= 4) t.push(['mummy', 3]); if (f >= 7) t.push(['scorpion', 3], ['skullfire', 2]); return t; },
+    // 草むら→サボテン（触ると痛い・叩くと砂属性）、たき火→オアシス（水分回復）、キノコ→間欠泉
+    chunks: biomeChunks({ bush: 'cactus', campfire: 'oasis', mushroom: 'geyser' }, { boss: [{ x: 120, kind: 'oasis', p: 1, bossOnly: 10 }] }),
+    bosses: { 5: 'sand_spider', 10: 'sand_colossus' },
+  },
+  snow: {
+    name: '雪原', tier: 2, bg: 'snow', bgm: 'battle', bossBgm: 'boss', jumpMul: 0.75, env: 'cold',
+    terrainTheme: { texture: ENV.snow_ground, onewayTexture: ENV.snow_oneway },
+    decor: [{ img: 'snow_tree', s: 0.9 }, { img: 'snow_tree2', s: 0.9 }, { img: 'snow_skull', s: 0.7 }, { img: 'snow_ice', s: 0.8 }],
+    foes(f) { const t = [['snow_wolf', 5], ['frost_ghost', 3], ['ice_wisp', 3]]; if (f >= 4) t.push(['ice_knight', 3]); if (f >= 7) t.push(['snow_wolf', 3], ['ice_knight', 2]); return t; },
+    // 草むら→氷晶（叩くと氷属性）、たき火はそのまま（霜竜の鎧を溶かす）、キノコ→間欠泉
+    chunks: biomeChunks({ bush: 'icecrystal', mushroom: 'geyser' }),
+    bosses: { 5: 'frost_wolf', 10: 'frost_dragon' },
+    surfaces: { ice: 0.3, snow: 0.2 },   // 地面が氷（滑る）・深雪（遅い）になる確率
+  },
+  volcano: {
+    name: '火山', tier: 3, bg: 'volcano', bgm: 'battle', bossBgm: 'boss', jumpMul: 1, env: 'lava', timeLimit: 180,
+    terrainTheme: { texture: ENV.volcano_ground, onewayTexture: ENV.volcano_oneway },
+    decor: [{ img: 'volcano_deadtree2', s: 0.8 }, { img: 'volcano_skeleton', s: 0.6 }, { img: 'volcano_deadtree', s: 0.75 }],
+    foes(f) { const t = [['fire_imp', 5], ['skullfire', 4], ['magma_slime', 3]]; if (f >= 4) t.push(['ash_reaper', 3]); if (f >= 7) t.push(['fire_imp', 3], ['ash_reaper', 2]); return t; },
+    // 草むら→溶岩だまり（踏むと熱い）、たき火→冷気の噴出口（氷属性＋制限時間の延長）、キノコ→間欠泉
+    chunks: biomeChunks({ bush: 'lavapit', campfire: 'frostvent', mushroom: 'geyser' }, {
+      gap: [{ x: 120, kind: 'lavapit', p: 0.5 }], step: [{ x: 720, kind: 'lavapit', p: 0.5 }],
+      boss: [{ x: 120, kind: 'frostvent', p: 1, bossOnly: 10 }],
+    }),
+    bosses: { 5: 'flame_reaper', 10: 'magma_colossus' },
+  },
+});
+
+// 魔界の敵（数値は「深さ1」相当の基準。深さに応じて generator が強くする）
+Object.assign(ENEMIES, {
+  // 砂漠
+  scorpion:     { spr: 'spider', scale: 0.75, hp: 40, dmg: 9, speed: 130, ai: 'lunge', w: 70, h: 52, exp: 9 },
+  skel:         { spr: 'skeleton', scale: 0.5, hp: 55, dmg: 11, speed: 100, ai: 'lunge', w: 60, h: 66, exp: 11 },
+  skullfire:    { spr: 'skullfire', scale: 0.42, hp: 32, dmg: 9, speed: 150, ai: 'fly', w: 50, h: 52, exp: 9, fly: true },
+  mummy:        { spr: 'hood', scale: 0.6, hp: 70, dmg: 10, speed: 60, ai: 'spore', w: 60, h: 68, exp: 13 },
+  sand_spider:  { spr: 'spider2', scale: 1.0, hp: 520, dmg: 12, speed: 180, ai: 'wolfBoss', w: 150, h: 100, exp: 120, boss: true, name: '砂の女王 オオサソリ（仮）' },
+  sand_colossus:{ spr: 'skel_l', scale: 0.95, hp: 1200, dmg: 13, speed: 70, ai: 'golemMoss', vine: 'sand', w: 180, h: 155, exp: 260, boss: true, name: '砂に眠る巨人（仮）' },
+  // 雪原
+  snow_wolf:    { spr: 'wolf', scale: 0.85, hp: 52, dmg: 10, speed: 160, ai: 'lunge', w: 70, h: 70, exp: 12 },
+  frost_ghost:  { spr: 'ghost2', scale: 0.55, hp: 50, dmg: 9, speed: 75, ai: 'ghost', w: 56, h: 60, exp: 12, fly: true, weak: 'fire' },
+  ice_wisp:     { spr: 'wisp_l', scale: 0.42, hp: 36, dmg: 9, speed: 140, ai: 'fly', w: 50, h: 60, exp: 10, fly: true },
+  ice_knight:   { spr: 'knight', scale: 0.62, hp: 110, dmg: 13, speed: 70, ai: 'lunge', w: 66, h: 80, exp: 18 },
+  frost_wolf:   { spr: 'wolf_l', scale: 1.05, hp: 540, dmg: 12, speed: 175, ai: 'wolfBoss', w: 140, h: 140, exp: 160, boss: true, name: '氷牙の狼王（仮）' },
+  // 氷の鎧：炎で溶ける
+  frost_dragon: { spr: 'dragon', scale: 0.62, hp: 1250, dmg: 14, speed: 70, ai: 'golemMoss', vine: 'ice', moss: { el: 'fire', name: '氷の鎧', filter: 'hue-rotate(160deg) brightness(1.35)' }, w: 200, h: 130, exp: 340, boss: true, name: '霜竜（仮）' },
+  // 火山
+  fire_imp:     { spr: 'imp', scale: 0.62, hp: 48, dmg: 11, speed: 140, ai: 'lunge', w: 56, h: 52, exp: 13 },
+  magma_slime:  { spr: 'golem_s', scale: 0.48, hp: 64, dmg: 10, speed: 70, ai: 'hop', w: 56, h: 56, exp: 12 },   // 溶岩の小岩人形
+  ash_reaper:   { spr: 'reaper', scale: 0.55, hp: 80, dmg: 12, speed: 80, ai: 'ghost', w: 70, h: 66, exp: 16, fly: true, weak: 'ice' },
+  flame_reaper: { spr: 'reaper2', scale: 0.85, hp: 560, dmg: 13, speed: 175, ai: 'wolfBoss', w: 160, h: 125, exp: 200, boss: true, name: '炎の死神（仮）' },
+  // 溶岩の鎧：氷で冷え固まる
+  magma_colossus:{ spr: 'golem', scale: 1.2, hp: 1300, dmg: 15, speed: 70, ai: 'golemMoss', vine: 'lava', moss: { el: 'ice', name: '溶岩の鎧', filter: 'hue-rotate(-35deg) saturate(2.2) brightness(1.1)' }, w: 175, h: 190, exp: 420, boss: true, name: '溶岩の巨像（仮）' },
 });

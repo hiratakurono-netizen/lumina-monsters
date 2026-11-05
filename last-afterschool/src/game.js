@@ -123,6 +123,20 @@ function drawHud(ctx, W) {
   ctx.font = `11px ${FONT}`; ctx.fillStyle = '#b9aee0';
   if (P.item) ctx.fillStyle = P.item.rarity.color;
   ctx.fillText(P.item ? P.item.name : P.weapon ? WEAPONS[P.weapon].name : (P.canFight ? '素手（キック）' : ''), 304, 84);
+  // 環境のゲージ（砂漠：水分、火山：残り時間）
+  if (W.ch.env && Game.run) {
+    const R = Game.run, y = IS_TOUCH ? 172 : 150; ctx.font = `13px ${FONT}`; ctx.lineWidth = 4; ctx.strokeStyle = '#1a0f2a';
+    if (W.ch.env === 'heat') {
+      const low = R.water <= 0, txt = low ? `熱中症 ${W.heatStage || 1}段階` : `水分 ${Math.ceil(R.water)}%`;
+      ctx.fillStyle = low ? '#ff9a6a' : '#9fe0ff'; ctx.strokeText(txt, 20, y); ctx.fillText(txt, 20, y);
+      bar(ctx, 120, y - 9, 110, 7, R.water / 100, R.water < 25 ? '#ff9a6a' : '#5ab4ff');
+    }
+    if (W.ch.env === 'lava') {
+      const t = Math.ceil(R.timeLeft), txt = t > 0 ? `残り ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}` : '灼熱！ HPが減っている';
+      ctx.font = `${t <= 30 ? 18 : 15}px ${FONT}`; ctx.fillStyle = t <= 30 && Math.floor(W.time * 4) % 2 ? '#ff6a4a' : '#ffb35a'; ctx.strokeText(txt, 20, y + 2); ctx.fillText(txt, 20, y + 2);
+    }
+    if (W.ch.env === 'cold') { ctx.fillStyle = '#bfe9ff'; ctx.strokeText('寒冷：ジャンプ力低下', 20, y); ctx.fillText('寒冷：ジャンプ力低下', 20, y); }
+  }
   if (P.tempElT > 0) { const E = ELEMENTS[P.tempEl]; ctx.font = `12px ${FONT}`; ctx.fillStyle = E.color; ctx.fillText(`${E.name}属性 ${Math.ceil(P.tempElT)}秒`, 304, 98); }
   if (W.ch.dungeon) { ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffe27a'; const g = `所持金 ${Game.save.gold} G` + (Game.run ? `（今回 +${Game.run.gained}）` : ''); ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4; ctx.strokeText(g, 20, IS_TOUCH ? 152 : 128); ctx.fillText(g, 20, IS_TOUCH ? 152 : 128); }
   // 下部

@@ -325,7 +325,8 @@ const Town = {
     { id: 'water', need: s => !!(s.dungeons.grassland || {}).cleared },        // 砂漠が開いたら
     { id: 'cooler', need: s => !!(s.dungeons.snow || {}).cleared },           // 火山が開いたら
   ],
-  best(s) { return Math.max(1, ...Object.values(s.dungeons || {}).map(d => d.best || 0)); },
+  // 一番深く行けた「深さ」（草原1〜10・砂漠11〜20・雪原21〜30・火山31〜40）。ショップの品ぞろえに使う
+  best(s) { return Math.max(1, ...Object.entries(s.dungeons || {}).map(([id, d]) => (d.best || 0) + ((DUNGEONS[id] || {}).tier || 0) * 10)); },
   // 装備の品ぞろえ：魔界から帰るたびに入れ替わる5品。到達した階が深いほど強い物が並ぶ
   restock(s) {
     const rng = makeRng((Date.now() ^ (s.uid * 2654435761)) >>> 0), fl = Math.min(10, this.best(s));

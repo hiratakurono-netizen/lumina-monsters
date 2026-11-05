@@ -56,14 +56,18 @@ class Terrain {
   }
 
   // 素材の地面（上に草、下に土の帯）を敷き詰める。すり抜け床は草の縁だけの薄い足場
-  drawTextured(ctx, cam, tex) {
-    const TW = tex.width, top = 26, soil = [30, tex.height - 30];
+  drawTextured(ctx, cam, tex, owTex) {
+    const TW = tex.width, top = Math.min(26, tex.height), soil = tex.height > 50 ? [30, tex.height - 30] : [Math.floor(tex.height / 2), Math.ceil(tex.height / 2)];
     for (const s of this.solids) {
       const x0 = Math.round(s.x - cam), y = Math.round(s.y);
       if (x0 + s.w < -10 || x0 > VIEW_W + 10) continue;
       ctx.save(); ctx.beginPath(); ctx.rect(x0, y - 8, s.w, VIEW_H); ctx.clip();
       const sx0 = ((s.x % TW) + TW) % TW;
-      if (s.type === 'oneway') {
+      if (s.type === 'oneway' && owTex && owTex.width) {   // すり抜け床の専用素材（岩床など）
+        const OW = owTex.width, oh = Math.min(owTex.height, 30), ox0 = ((s.x % OW) + OW) % OW;
+        for (let x = x0 - ox0; x < x0 + s.w; x += OW) ctx.drawImage(owTex, 0, 0, OW, oh, x, y - 4, OW, oh);
+        ctx.fillStyle = 'rgba(20,10,30,.45)'; ctx.fillRect(x0, y + oh - 4, s.w, 5);
+      } else if (s.type === 'oneway') {
         for (let x = x0 - sx0; x < x0 + s.w; x += TW) ctx.drawImage(tex, 0, 0, TW, top, x, y - 6, TW, top);
         ctx.fillStyle = 'rgba(20,10,30,.45)'; ctx.fillRect(x0, y + top - 6, s.w, 6);
       } else {
@@ -72,8 +76,14 @@ class Terrain {
           ctx.drawImage(tex, x, y - 6);
           for (let yy = y - 6 + tex.height; yy < y + h; yy += soil[1]) ctx.drawImage(tex, 0, soil[0], TW, soil[1], x, yy, TW, soil[1]);
         }
+        // 雪原の特殊な床：氷（青い光沢）・深雪（白く盛り上がる）
+        if (s.surface === 'ice') { ctx.fillStyle = 'rgba(170,225,255,.55)'; ctx.fillRect(x0, y - 6, s.w, 12); ctx.fillStyle = 'rgba(255,255,255,.75)'; for (let i = 20; i < s.w; i += 70) ctx.fillRect(x0 + i, y - 4, 26, 2); }
+        if (s.surface === 'snow') { ctx.fillStyle = '#f4fbff'; for (let i = 0; i < s.w; i += 22) { ctx.beginPath(); ctx.ellipse(x0 + i + 11, y - 4, 14, 7, 0, Math.PI, 0); ctx.fill(); } }
         // 側面（段差・壁）に影
-        ctx.fillStyle = 'rgba(20,10,30,.35)'; ctx.fillRect(x0, y + 10, 3, h); ctx.fillRect(x0 + s.w - 3, y + 10, 3, h);
+        // 隣に同じ高さの地面が続いている側には影を付けない（継ぎ目の縦線を出さない）
+        const joinL = this.solids.some(o => o !== s && o.type !== 'oneway' && o.y === s.y && Math.abs(o.x + o.w - s.x) < 2);
+        const joinR = this.solids.some(o => o !== s && o.type !== 'oneway' && o.y === s.y && Math.abs(s.x + s.w - o.x) < 2);
+        ctx.fillStyle = 'rgba(20,10,30,.35)'; if (!joinL) ctx.fillRect(x0, y + 10, 3, h); if (!joinR) ctx.fillRect(x0 + s.w - 3, y + 10, 3, h);
       }
       ctx.restore();
     }
@@ -83,7 +93,7 @@ class Terrain {
     if (!this.solids.length) return;
     const th = Object.assign({ top: '#8fb27a', side: '#5d6e4f', dark: '#3e4a35', edge: '#c8e0a8', oneway: '#b89a7a', onewayTop: '#e2cfa8' }, this.theme || {});
     const tex = th.texture && IMG[th.texture];
-    if (tex && tex.width) return this.drawTextured(ctx, cam, tex);
+    if (tex && tex.width) return this.drawTextured(ctx, cam, tex, th.onewayTexture && IMG[th.onewayTexture]);
     for (const s of this.solids) {
       const x = Math.round(s.x - cam), y = Math.round(s.y);
       if (x + s.w < -10 || x > VIEW_W + 10) continue;

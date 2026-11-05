@@ -230,6 +230,31 @@ const Backgrounds = (() => {
     const floor = floorTile([['#0e0818', 0, 72]]);
     return { sky: s, layers: [{ img: tile, f: 0.25, y: 0 }], floor, ambient: 'mote' };
   }
+  // 砂漠・雪原・火山：素材の帯（空＋奥から手前へ2〜3枚）を縦に重ね、手前ほど速く流す
+  function biomeArt(name, n) {
+    const sky = IMG[ENV[`${name}_sky`]]; if (!sky || !sky.width) return null;
+    const layers = [];
+    for (let i = 0; i < n; i++) layers.push(IMG[ENV[`${name}_layer${i}`]]);
+    const k = 1.25;   // 帯の拡大率
+    const mirror = im => {   // 左右反転をつなげて継ぎ目なく流す
+      const w = Math.round(im.width * k), h = Math.round(im.height * k), [c, x] = cv(w * 2, h);
+      x.drawImage(im, 0, 0, w, h); x.save(); x.translate(w * 2, 0); x.scale(-1, 1); x.drawImage(im, 0, 0, w, h); x.restore();
+      // 帯の上側をぼかして、奥の帯や空となじませる（帯の境目の横線を消す）
+      x.globalCompositeOperation = 'destination-in';
+      const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.4, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+      x.fillStyle = g; x.fillRect(0, 0, w * 2, h);
+      return c;
+    };
+    // 手前の帯の下端を地面に合わせ、奥の帯ほど上に（少し重ねて）置く
+    const out = []; let bottom = GROUND_Y + 14;
+    for (let i = n - 1; i >= 0; i--) {
+      const img = mirror(layers[i]); out.unshift({ img, f: 0.12 + 0.18 * i, y: bottom - img.height });
+      bottom = bottom - img.height * 0.55;
+    }
+    const [s, sx] = cv(VIEW_W, VIEW_H);
+    sx.drawImage(sky, 0, 0, sky.width, sky.height, 0, 0, VIEW_W, Math.max(bottom + 40, sky.height * k));
+    return { sky: s, layers: out, floor: floorTile([['#1a1018', 0, 72]]), ambient: name === 'snow' ? 'snowfall' : name === 'volcano' ? 'ember' : 'sand' };
+  }
   function grassland() {
     const art = grasslandArt(); if (art) return art;
     const s = sky([[0, '#1f1838'], [0.5, '#3d3a6a'], [1, '#6a8a8a']], x => {
@@ -269,6 +294,7 @@ const Backgrounds = (() => {
   function get(name) {
     if (!cache[name]) cache[name] = ({
       street, schoolyard, corridor, homeec, town, grassland,
+      desert: () => biomeArt('desert', 2), snow: () => biomeArt('snow', 3), volcano: () => biomeArt('volcano', 3),
       rooftop: () => rooftop(false), rooftop_calm: () => rooftop(true),
     })[name]();
     return cache[name];

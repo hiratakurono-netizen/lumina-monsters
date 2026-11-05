@@ -36,38 +36,50 @@ const DungeonGen = {
 
     const ch = {
       id: `dg_${floor}`, dungeon: true, dungeonId: null, floor, title: D.name, sub: `${floor}F`, bg: D.bg,
-      bgm: isBoss ? D.bossBgm : D.bgm, terrainTheme: D.terrainTheme, jumpMul: D.jumpMul,
+      bgm: isBoss ? D.bossBgm : D.bgm, terrainTheme: D.terrainTheme, jumpMul: D.jumpMul, env: D.env || null,
+      depth: (D.tier || 0) * 10 + floor,   // 深さ：草原1〜10・砂漠11〜20・雪原21〜30・火山31〜40
       loadout: { weapons: [], fire: false, partner: true, canFight: true },
       intro: [], events: [], endX: 99999, outro: [],
       terrain: [], spawns: [], chests: [], objs: [], exitX: 0, boss: null,
     };
-    const hpMul = 1 + 0.14 * (floor - 1), dmgMul = 1 + 0.07 * (floor - 1);   // 深い階ほど強い（行動の変化は第6段階で追加）
+    const depth = (D.tier || 0) * 10 + floor;
+    const hpMul = 1 + 0.14 * (depth - 1), dmgMul = 1 + 0.07 * (depth - 1);   // 深いほど強い
+    ch.dmgMul = dmgMul;   // 敵の攻撃（接触・弾・ボスの技）すべてに掛かる
     const foes = D.foes(floor);
     const perChunk = 1 + Math.floor(floor / 3);   // 1部屋あたりの敵の数の目安
     let x = 0;
     for (const k of seq) {
       const c = C[k];
-      for (const s of c.solids) ch.terrain.push(Object.assign({}, s, { x: s.x + x }));
+      for (const s of c.solids) {
+        const t = Object.assign({}, s, { x: s.x + x });
+        // 雪原：地面の一部が氷（滑る）や深雪（遅い）になる。最初と出口の部屋はふつうの地面
+        if (D.surfaces && t.y === GROUND_Y && t.type !== 'oneway' && k !== 'start' && k !== 'exit' && k !== 'boss') {
+          const r = rng.next(); if (r < D.surfaces.ice) t.surface = 'ice'; else if (r < D.surfaces.ice + D.surfaces.snow) t.surface = 'snow';
+        }
+        ch.terrain.push(t);
+      }
       // 敵：候補から選ぶ（多すぎない）
       const spots = [...c.foes];
       const count = Math.min(spots.length, perChunk + rng.int(0, 1));
       for (let i = 0; i < count; i++) {
         const sp = spots.splice(rng.int(0, spots.length - 1), 1)[0];
-        let type = rng.weighted(foes, f => f[1])[0];
-        if (sp.fly && !ENEMIES[type].fly) type = 'bat';
-        if (!sp.fly && ENEMIES[type].fly) type = 'slime';
+        // 置き場所（空中か地上か）に合う敵だけから選ぶ。合う敵がいなければ置かない
+        const fit = foes.filter(f => !!ENEMIES[f[0]].fly === !!sp.fly);
+        if (!fit.length) continue;
+        const type = rng.weighted(fit, f => f[1])[0];
         ch.spawns.push({ type, x: sp.x + x, y: sp.y, hpMul, dmgMul });
       }
       // 宝箱：候補ごとに一定の確率（寄り道の宝箱は必ず）
-      for (const cs of c.chests) if (cs.hidden || rng.chance(0.55)) ch.chests.push({ x: cs.x + x, y: cs.y, hidden: !!cs.hidden, viaSpring: !!cs.viaSpring, floor });
+      for (const cs of c.chests) if (cs.hidden || rng.chance(0.55)) ch.chests.push({ x: cs.x + x, y: cs.y, hidden: !!cs.hidden, viaSpring: !!cs.viaSpring, floor: depth });   // 宝箱の中身は「深さ」で決まる
       for (const o of c.objs || []) {
         if (o.bossOnly && o.bossOnly !== floor) continue;
         if (rng.chance(o.p)) ch.objs.push({ x: o.x + x, y: o.y || GROUND_Y, kind: o.kind, alt: rng.chance(0.5) });
       }
       if (c.wave) ch.events.push({ x: x + 200, type: 'wave', waves: [this.waveList(rng, foes, floor), this.waveList(rng, foes, floor)], hpMul, dmgMul });
-      if (c.boss) ch.boss = { type: D.bosses[floor], x: x + c.w - 300, hpMul: 1 + 0.05 * (floor - 1) };
+      if (c.boss) ch.boss = { type: D.bosses[floor], x: x + c.w - 300, hpMul: 1 + 0.08 * (depth - 1) };
       // 飾りの花（触れても何も起きない）
-      for (const t of c.solids) if (t.y === GROUND_Y && t.w > 200) for (let fx = t.x + 60; fx < t.x + t.w - 60; fx += 260) if (rng.chance(0.35)) ch.objs.push({ x: fx + x + rng.int(-40, 40), y: GROUND_Y, kind: 'flowers' });
+      // 飾り（花・サボテン・雪の木など。触れても何も起きない）
+      for (const t of c.solids) if (t.y === GROUND_Y && t.w > 200 && D.decor) for (let fx = t.x + 60; fx < t.x + t.w - 60; fx += 260) if (rng.chance(0.35)) { const d = rng.pick(D.decor); ch.objs.push({ x: fx + x + rng.int(-40, 40), y: GROUND_Y, kind: 'deco', img: d.img, s: d.s }); }
       if (c.exitX) ch.exitX = x + c.exitX;
       x += c.w;
     }

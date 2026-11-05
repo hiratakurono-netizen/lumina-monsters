@@ -11,8 +11,18 @@ const ENV = {
   bush: 'assets/env/bush.png', bush2: 'assets/env/bush2.png', flowers: 'assets/env/flowers.png',
   store: 'assets/env/store.png', school: 'assets/env/school.png', bench: 'assets/env/bench.png', lamp: 'assets/env/lamp.png', vending: 'assets/env/vending.png', pole: 'assets/env/pole.png',
 };
+// 砂漠・雪原・火山の素材（tools/extract_biomes.py で切り出し）。ENV['desert_cactus'] などで引ける
+const BIOME_PROPS = {
+  desert: ['sky', 'layer0', 'layer1', 'ground', 'oneway', 'obelisk', 'house', 'cactus', 'cactus2', 'cactus3', 'palm', 'palms', 'skull', 'skull2', 'block', 'bricks', 'i_dagger', 'i_sword', 'i_axe'],
+  snow: ['sky', 'layer0', 'layer1', 'layer2', 'ground', 'oneway', 'tower', 'igloo', 'tree', 'tree2', 'tree3', 'skeleton', 'ice', 'skull', 'i_dagger', 'i_sword', 'i_axe'],
+  volcano: ['sky', 'layer0', 'layer1', 'layer2', 'ground', 'oneway', 'tower', 'furnace', 'deadtree', 'deadtree2', 'deadtree3', 'lavapit', 'skeleton', 'i_dagger', 'i_sword', 'i_axe'],
+};
+for (const [b, list] of Object.entries(BIOME_PROPS)) for (const n of list) ENV[`${b}_${n}`] = `assets/env/${b}_${n}.png`;
 // 専用のアイコン画像がある装備
-const ITEM_ICON = { w_chair_pipe: 'assets/env/i_chair_pipe.png', w_bat_mop: 'assets/env/i_bat_mop.png', w_bat_metal: 'assets/env/i_bat_metal.png' };
+const ITEM_ICON = { w_chair_pipe: 'assets/env/i_chair_pipe.png', w_bat_mop: 'assets/env/i_bat_mop.png', w_bat_metal: 'assets/env/i_bat_metal.png',
+  w_stone_dagger: ENV.desert_i_dagger, w_stone_sword: ENV.desert_i_sword, w_stone_axe: ENV.desert_i_axe,
+  w_ice_dagger: ENV.snow_i_dagger, w_frost_sword: ENV.snow_i_sword, w_ice_axe: ENV.snow_i_axe,
+  w_obsidian_dagger: ENV.volcano_i_dagger, w_magma_blade: ENV.volcano_i_sword, w_volcano_axe: ENV.volcano_i_axe };
 
 const RARITIES = [
   { id: 'common',   name: 'コモン',     color: '#e8e4f0', affixes: 0, mul: 1.00, weight: 60 },
@@ -41,16 +51,33 @@ const ITEM_BASES = {
   w_desk_class: { kind: 'weapon', type: 'desk',  name: '教室の机',       atk: 30, price: 100, minFloor: 1 },
   w_desk_teach: { kind: 'weapon', type: 'desk',  name: '教卓',           atk: 36, price: 200, minFloor: 5 },
   w_desk_lab:   { kind: 'weapon', type: 'desk',  name: '理科室の実験台', atk: 42, price: 300, minFloor: 8 },
+  // ---- 魔界の武器（専用の振りモーションはまだないので、短剣＝バット系・剣＝椅子系・斧＝机系の振りを使う：仮） ----
+  // minFloor は「深さ」（草原1〜10・砂漠11〜20・雪原21〜30・火山31〜40）。element は最初から付いている属性
+  w_stone_dagger:   { kind: 'weapon', type: 'bat',   name: '石の短剣',       atk: 22, price: 260, minFloor: 11 },
+  w_stone_sword:    { kind: 'weapon', type: 'chair', name: '石の剣',         atk: 30, price: 320, minFloor: 13 },
+  w_stone_axe:      { kind: 'weapon', type: 'desk',  name: '石の斧',         atk: 44, price: 400, minFloor: 15, element: 'sand' },
+  w_ice_dagger:     { kind: 'weapon', type: 'bat',   name: '氷鉄の短剣',     atk: 30, price: 520, minFloor: 21 },
+  w_frost_sword:    { kind: 'weapon', type: 'chair', name: '霜の魔剣',       atk: 42, price: 640, minFloor: 23, element: 'ice' },
+  w_ice_axe:        { kind: 'weapon', type: 'desk',  name: '氷晶の戦斧',     atk: 60, price: 780, minFloor: 25, element: 'ice' },
+  w_obsidian_dagger:{ kind: 'weapon', type: 'bat',   name: '黒曜石の短剣',   atk: 40, price: 900, minFloor: 31 },
+  w_magma_blade:    { kind: 'weapon', type: 'chair', name: 'マグマブレード', atk: 56, price: 1100, minFloor: 33, element: 'fire' },
+  w_volcano_axe:    { kind: 'weapon', type: 'desk',  name: '火山の斧',       atk: 80, price: 1300, minFloor: 35, element: 'fire' },
   // ---- 防具（見た目は変わらない） ----
   a_uniform:    { kind: 'armor', name: '制服',             def: 0,  hp: 0,  price: 0,   minFloor: 99 },
   a_jersey:     { kind: 'armor', name: '学校ジャージ',     def: 6,  hp: 10, price: 120, minFloor: 1 },
   a_cardigan:   { kind: 'armor', name: 'カーディガン',     def: 10, hp: 0,  price: 160, minFloor: 2 },
   a_coat:       { kind: 'armor', name: '冬のコート',       def: 16, hp: 20, price: 260, minFloor: 5 },
+  a_cloak:      { kind: 'armor', name: '砂よけの外套',     def: 24, hp: 30, price: 480, minFloor: 12 },
+  a_down:       { kind: 'armor', name: 'ダウンジャケット', def: 34, hp: 50, price: 760, minFloor: 22 },
+  a_fireproof:  { kind: 'armor', name: '耐火の防護服',     def: 46, hp: 70, price: 1100, minFloor: 32 },
   // ---- アクセサリー ----
   c_hairpin:    { kind: 'accessory', name: 'ヘアピン',     crit: 4,  price: 90,  minFloor: 1 },
   c_ribbon:     { kind: 'accessory', name: 'リボン',       hp: 15,   price: 90,  minFloor: 1 },
   c_watch:      { kind: 'accessory', name: '腕時計',       spd: 6,   price: 140, minFloor: 3 },
   c_charm:      { kind: 'accessory', name: 'お守り',       def: 6,   price: 140, minFloor: 3 },
+  c_sun:        { kind: 'accessory', name: '太陽のペンダント', hp: 40, def: 6, price: 420, minFloor: 12 },
+  c_snowflake:  { kind: 'accessory', name: '雪の結晶のブローチ', crit: 9, price: 640, minFloor: 22 },
+  c_ember:      { kind: 'accessory', name: '熾火の指輪',     spd: 10, def: 10, price: 900, minFloor: 32 },
 };
 
 // 消耗品（同じ物は個数で重ねる）。use は戦闘中の効果（ダンジョンの段階で使う）
@@ -75,6 +102,7 @@ const AFFIXES = [
   { id: 'spcost',name: '必殺MP軽減', unit: '',  roll: [2, 6],   slots: ['weapon', 'accessory'] },
   { id: 'el_sand', name: '砂属性',   unit: '',  roll: [1, 1],   slots: ['weapon'], element: 'sand' },
   { id: 'el_fire', name: '炎属性',   unit: '',  roll: [1, 1],   slots: ['weapon'], element: 'fire' },
+  { id: 'el_ice',  name: '氷属性',   unit: '',  roll: [1, 1],   slots: ['weapon'], element: 'ice' },
 ];
 const AFFIX_BY_ID = Object.fromEntries(AFFIXES.map(a => [a.id, a]));
 

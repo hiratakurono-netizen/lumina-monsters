@@ -1,0 +1,88 @@
+"""Cut the desert / snow / volcano environment sheets (1509x688, flat background colour).
+Usage (from last-afterschool/):  python3 -I tools/extract_biomes.py
+Writes assets/env/<biome>_<name>.png. Boxes are (x0, y0, x1, y1) on each sheet.
+Parallax strips: the first strip (sky) is kept opaque, the others have the sheet colour removed
+so they can be layered.
+"""
+import os
+from collections import deque
+import numpy as np
+from PIL import Image
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC = os.path.join(ROOT, 'assets', 'source')
+OUT = os.path.join(ROOT, 'assets', 'env')
+
+BIOMES = {
+    'desert': {
+        'bg': (2, 120, 124),
+        'sky': [(763, 41, 1507, 157)], 'layers': [(763, 171, 1507, 288), (763, 298, 1507, 414)],
+        'ground': (9, 301, 527, 342), 'oneway': (9, 408, 527, 449),
+        'props': {'i_dagger': (30, 70, 130, 195), 'i_sword': (155, 50, 280, 200), 'i_axe': (296, 46, 424, 200),
+                  'obelisk': (776, 486, 900, 672), 'house': (920, 490, 1100, 672), 'cactus': (1112, 472, 1184, 562),
+                  'cactus2': (1186, 492, 1244, 562), 'cactus3': (1250, 522, 1288, 562), 'palm': (1296, 482, 1376, 590),
+                  'palms': (1116, 592, 1204, 676), 'skull': (1208, 620, 1274, 676), 'skull2': (1276, 616, 1350, 678),
+                  'block': (1382, 530, 1442, 590), 'bricks': (1372, 596, 1507, 678)},
+    },
+    'snow': {
+        'bg': (27, 73, 142),
+        'sky': [(767, 37, 1508, 122)], 'layers': [(767, 132, 1508, 219), (767, 229, 1508, 316), (767, 325, 1508, 414)],
+        'ground': (9, 301, 532, 342), 'oneway': (9, 407, 532, 450),
+        'props': {'i_dagger': (30, 70, 130, 185), 'i_sword': (155, 38, 302, 202), 'i_axe': (296, 42, 444, 198),
+                  'tower': (764, 482, 884, 678), 'igloo': (936, 536, 1100, 674), 'tree': (1116, 482, 1204, 594),
+                  'tree2': (1206, 476, 1280, 594), 'tree3': (1286, 442, 1390, 598), 'skeleton': (1116, 596, 1290, 678),
+                  'ice': (1390, 530, 1450, 594), 'skull': (1450, 536, 1507, 594)},
+    },
+    'volcano': {
+        'bg': (24, 72, 138),
+        'sky': [(770, 36, 1508, 120)], 'layers': [(770, 130, 1508, 220), (770, 229, 1508, 317), (770, 326, 1508, 416)],
+        'ground': (9, 302, 536, 342), 'oneway': (9, 409, 536, 452),
+        'props': {'i_dagger': (26, 66, 134, 182), 'i_sword': (152, 36, 308, 202), 'i_axe': (296, 38, 448, 198),
+                  'tower': (786, 482, 920, 678), 'furnace': (926, 486, 1104, 672), 'deadtree': (1120, 430, 1220, 598),
+                  'deadtree2': (1218, 480, 1294, 598), 'deadtree3': (1296, 434, 1404, 598), 'lavapit': (1414, 484, 1507, 530),
+                  'skeleton': (1126, 592, 1294, 678)},
+    },
+}
+
+def key(a, bg, tol=70, trim=1):
+    h, w, _ = a.shape
+    near = np.abs(a - np.array(bg)).sum(axis=2) < tol
+    seen = np.zeros((h, w), bool); q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if near[y, x] and not seen[y, x]: seen[y, x] = True; q.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if near[y, x] and not seen[y, x]: seen[y, x] = True; q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and not seen[ny, nx] and near[ny, nx]:
+                seen[ny, nx] = True; q.append((ny, nx))
+    # JPEG の縁のにじみ（背景色が混ざった1px）を削る
+    fg = ~seen
+    for _ in range(trim):
+        e = fg.copy(); e[1:] &= fg[:-1]; e[:-1] &= fg[1:]; e[:, 1:] &= fg[:, :-1]; e[:, :-1] &= fg[:, 1:]
+        edge = fg & ~e
+        mix = np.abs(a - np.array(bg)).sum(axis=2) < tol * 2.2
+        fg &= ~(edge & mix)
+    img = Image.fromarray(np.dstack([a.astype(np.uint8), np.where(fg, 255, 0).astype(np.uint8)]), 'RGBA')
+    return img
+
+def crop(a, b): return a[b[1]:b[3], b[0]:b[2]]
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    for name, B in BIOMES.items():
+        a = np.asarray(Image.open(os.path.join(SRC, f'sheet_env_{name}.jpg')).convert('RGB')).astype(int)
+        save = lambda img, n: img.save(os.path.join(OUT, f'{name}_{n}.png'), optimize=True)
+        save(Image.fromarray(crop(a, B['sky'][0]).astype(np.uint8)), 'sky')
+        for i, b in enumerate(B['layers']): save(key(crop(a, b), B['bg']), f'layer{i}')
+        for n in ('ground', 'oneway'): save(Image.fromarray(crop(a, B[n]).astype(np.uint8)), n)
+        for n, b in B['props'].items():
+            img = key(crop(a, b), B['bg']); bb = img.getbbox(); save(img.crop(bb) if bb else img, n)
+        print(name, 'ok')
+
+if __name__ == '__main__':
+    main()
