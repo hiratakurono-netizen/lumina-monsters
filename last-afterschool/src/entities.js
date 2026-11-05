@@ -18,10 +18,11 @@ function drawHero(ctx, anim, i, x, y, face, scale) {
   ctx.drawImage(img, f.x, f.y, f.w, f.h, -f.ax * scale, -f.ay * scale, f.w * scale, f.h * scale);
   ctx.restore();
 }
-function drawMon(ctx, spr, x, y, scale, flip, sx = 1, sy = 1) {
+function drawMon(ctx, spr, x, y, scale, flip, sx = 1, sy = 1, rot = 0) {
   const m = SPRITE_DATA.monsters[spr], img = IMG[m.img];
   const w = m.w * scale * sx, h = m.h * scale * sy;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); if (flip) ctx.scale(-1, 1);
+  if (rot) { ctx.translate(0, -h / 2); ctx.rotate(rot); ctx.translate(0, h / 2); }   // 体の中心で傾ける
   ctx.drawImage(img, -w / 2, -h, w, h); ctx.restore();
 }
 
@@ -35,7 +36,7 @@ const WEAPON_ART = {
   chair: { file: 'assets/weapons/weapon_chair.png', grip: [4, 50], rot: 0,   tip: [0, -48], S: 1.25 },
   desk:  { file: 'assets/weapons/weapon_desk.png',  grip: [8, 52], rot: -90, tip: [58, -30], S: 1.25 },
 };
-const HAND = { x: 22, y: -80 };  // 体の基準点から見た手の位置（ワールド、向き=+1）
+const HAND = { x: 20, y: -70 };  // 体の基準点から見た手の位置（ワールド、向き=+1）
 const HOLD_ANGLE = { bat: -28, chair: -18, desk: -20 }; // 持ち歩き時の角度（度・前方が+90）
 
 // =====================================================================
@@ -112,7 +113,6 @@ class Player {
     const el = this.element;
     a.trail.forEach(p => p.t += dt);
     a.trail = a.trail.filter(p => p.t < 0.3);
-    if (el === 'none') return;
     const tip = this.tipAt(this.weaponAngle(a), key);
     a.trail.push({ x: tip.x, y: tip.y, t: 0 });
     if (el === 'sand' && Math.random() < 0.7) this.w.dust(tip.x, tip.y, 1, '#d9c08c');
@@ -270,7 +270,7 @@ class Player {
     if (this.hp <= 0) this.w.onPlayerDown();
     return true;
   }
-  box() { return [this.x - 22, this.y - 125, this.x + 22, this.y]; }
+  box() { return [this.x - 20, this.y - 125 * HERO_SIZE, this.x + 20, this.y]; }
   gainExp(n) {
     this.exp += n;
     let need = 20 + this.lv * 15;
@@ -328,7 +328,7 @@ class Player {
     const a = this.atk, key = a.def.weapon; if (!key) return;
     const art = WEAPON_ART[key], el = this.element, E = ELEMENTS[el];
     // 属性の軌跡（砂＝砂煙、炎＝揺らぐ火の線）
-    if (a.trail.length > 1 && el !== 'none') {
+    if (a.trail.length > 1) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const pts = a.trail.map(p => ({ x: p.x - cam, y: p.y, t: p.t }));
       const jit = el === 'fire' ? 4 : 1;
@@ -359,7 +359,7 @@ class Partner {
   constructor(p) { this.p = p; this.x = p.x; this.y = p.y - 130; this.t = 0; this.glow = 0; }
   update(dt) {
     this.t += dt; this.glow = Math.max(0, this.glow - dt);
-    const tx = this.p.x - this.p.face * 44, ty = this.p.y - 158 + Math.sin(this.t * 3) * 6;
+    const tx = this.p.x - this.p.face * 40, ty = this.p.y - 140 + Math.sin(this.t * 3) * 6;
     this.x += (tx - this.x) * Math.min(1, dt * 6); this.y += (ty - this.y) * Math.min(1, dt * 6);
   }
   draw(ctx, cam) {
@@ -410,10 +410,10 @@ class Enemy {
     const grav = (d.fly && !this.launched) ? 0 : 1900;
     const T = W.terrain, prevX = this.x, prevY = this.y;
     // 足場の端から落ちないように止まる（飛ばされた時は落ちる）
-    if (!d.fly && this.onGround && !this.launched && this.vx && this.vy >= 0) { const g = T.groundBelow(this.x + Math.sign(this.vx) * (d.w / 2 + 6), this.y - 2, 0); if (g > this.y + 40) this.vx = 0; }
+    if (!d.fly && !d.boss && this.onGround && !this.launched && this.vx && this.vy >= 0) { const g = T.groundBelow(this.x + Math.sign(this.vx) * (d.w / 2 + 6), this.y - 2, 0); if (g > this.y + 40) this.vx = 0; }
     this.vy += grav * dt; this.x += this.vx * dt; this.y += this.vy * dt;
     if (!d.fly) this.x = T.blockX(this.x, prevX, this.y - d.h, this.y - 4, d.w / 2);
-    const gnd = T.groundBelow(this.x, prevY, 0);
+    const gnd = T.groundBelow(this.x, prevY, 0, !!d.boss);   // ボスはすり抜け床に乗らない（大きな体で足場に引っかからないように）
     const floor = d.fly && !this.launched ? Math.min(gnd, GROUND_Y) - 20 : gnd;
     if (this.y > VIEW_H + 120 && !d.boss) { this.dead = true; return; }  // 穴に落ちた敵は消える
     if (this.y >= floor) {
@@ -440,6 +440,17 @@ class Enemy {
     if (this.state === 'tele' || this.state === 'crouch') ox = Math.sin(this.t * 60) * 2;
     if (this.state === 'charge' && d.ai === 'spore') { sx = 1 + Math.sin(this.t * 30) * 0.06 + 0.1; sy = sx; }
     if (d.ai === 'golem') { oy = this.liftY || 0; }
+    let rot = 0;
+    // 1枚絵なので、歩き・溜め・突進をプログラムで動かす
+    if (!d.fly && d.ai !== 'hop' && this.onGround && Math.abs(this.vx) > 30) oy -= Math.abs(Math.sin(this.t * 14)) * 5;
+    if (d.ai === 'wolfBoss') {
+      if (this.state === 'crouch') { sx = 1.18; sy = 0.78; ox = Math.sin(this.t * 50) * 2; }
+      if (this.state === 'howl') { const k = Math.sin(this.t * 40) * 0.04; sx = 1 + k; sy = 1.08 - k; ox = Math.sin(this.t * 70) * 3; }
+      if (this.state === 'dash') rot = -0.12;
+      if (this.state === 'pounce') rot = this.vy < 0 ? -0.35 : 0.25;
+      if (this.state === 'dizzy') rot = Math.sin(this.t * 6) * 0.1;
+      if (this.state === 'land') { sx = 1.2; sy = 0.82; }
+    }
     const spawnA = this.spawnT > 0 ? 1 - this.spawnT / 0.4 : 1;
     // 影
     ctx.fillStyle = 'rgba(10,0,20,.3)'; ctx.beginPath();
@@ -449,10 +460,11 @@ class Enemy {
     ctx.save();
     ctx.globalAlpha = this.alpha * spawnA * (this.dying > 0 ? this.dying / 0.45 : 1);
     if (this.dying > 0) { sx *= 1 + (0.45 - this.dying); sy *= 1 - (0.45 - this.dying) * 1.5; }
-    drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy);
-    if (this.flash > 0 || this.dying > 0 || this.state === 'tele' && Math.floor(this.t * 12) % 2) {
+    drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot);
+    const tele = (this.state === 'tele' || this.state === 'crouch' || this.state === 'howl') && Math.floor(this.t * 12) % 2;
+    if (this.flash > 0 || this.dying > 0 || tele) {
       ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.7;
-      drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy);
+      drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot);
     }
     if (this.rage) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.18 + Math.sin(this.t * 8) * 0.08; drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy); }
     ctx.restore();
@@ -461,6 +473,10 @@ class Enemy {
       const bw = 40, x = this.x - cam - bw / 2, y = this.y - d.h - 8 + oy;
       ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(x, y, bw, 4);
       ctx.fillStyle = '#ff6a8a'; ctx.fillRect(x, y, bw * Math.max(0, this.hp / this.maxHp), 4);
+    }
+    if (d.boss && (this.state === 'crouch' || this.state === 'howl' || this.state === 'tele')) {
+      ctx.font = `28px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#ff6a6a'; ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 5;
+      ctx.strokeText('！', this.x - cam, this.y - d.h - 24); ctx.fillText('！', this.x - cam, this.y - d.h - 24); ctx.textAlign = 'left';
     }
     if (this.state === 'dizzy') {
       for (let i = 0; i < 3; i++) { const a = this.t * 4 + i * 2.1; ctx.fillStyle = '#ffe680'; ctx.fillRect(this.x - cam + Math.cos(a) * 40 - 3, this.y - d.h - 10 + Math.sin(a) * 8, 6, 6); }
@@ -519,6 +535,60 @@ const AI = {
     e.phased = cyc >= 0.7;
     const ty = P.y - 70 + Math.sin(e.t * 1.7) * 40;
     e.vx += (dir * e.d.speed - e.vx) * dt * 1.5; e.vy = (ty - e.y) * 1.5;
+  },
+  // 草原の主 オオカミ：飛びかかり（伏せて溜める）／突進（震えて赤く光る）／HP半分で子分を呼ぶ
+  wolfBoss(e, dt, dir, dist, P, W) {
+    const rage = e.hp < e.maxHp * 0.5;
+    if (rage && !e.rage) { e.rage = true; e.state = 'howl'; e.st = 1.0; e.next = 'summon'; e.vx = 0; Audio2.sfx('warn'); W.floatText(e.x, e.y - 170, 'ウォォーン！', '#ff9a9a', 22); }
+    const sp = rage ? 1.2 : 1;
+    e.st -= dt; e.contactDmg = 0;
+    const lo = W.camLock ? W.camLock.min + 90 : 90, hi = W.camLock ? W.camLock.max + VIEW_W - 90 : W.ch.length - 90;
+    switch (e.state) {
+      case 'move':   // 主人公との間合いを取りながら回り込む（下がり続けない）
+        e.cool -= dt * sp;
+        e.vx = dist > 300 ? dir * e.d.speed : dist < 200 ? -dir * e.d.speed * 0.6 : 0;
+        if ((e.x <= lo && e.vx < 0) || (e.x >= hi && e.vx > 0)) e.vx = 0;
+        if (e.cool <= 0) {
+          e.vx = 0;
+          if (dist < 420 && Math.random() < 0.6) { e.state = 'crouch'; e.st = 0.7 / sp; }
+          else { e.state = 'howl'; e.st = 0.8 / sp; e.next = 'dash'; e.dir = dir; }
+          Audio2.sfx('warn');
+        }
+        break;
+      case 'crouch':   // 伏せて溜める → 主人公めがけて跳ぶ
+        e.vx = 0; e.face = dir;
+        if (e.st <= 0) { e.state = 'pounce'; const T = 0.62; e.vx = (P.x - e.x) / T; e.vy = -680; e.onGround = false; e.st = 1.2; }
+        break;
+      case 'pounce':
+        e.contactDmg = e.d.dmg;
+        if (e.onGround && e.vy >= 0) {
+          e.state = 'land'; e.st = 0.9; e.vx = 0; W.shake = 12; Audio2.sfx('slam'); W.dust(e.x, e.y, 10);
+          W.addProj(new Shockwave(W, e.x, 1)); W.addProj(new Shockwave(W, e.x, -1));
+        }
+        break;
+      case 'howl':     // 震えて赤く光る → 突進 or 子分を呼ぶ
+        e.vx = 0;
+        if (e.next === 'dash') e.face = e.dir;
+        if (e.st <= 0) {
+          if (e.next === 'summon') {
+            for (const side of [1, -1]) { const m = W.makeEnemy('wolf', side > 0 ? hi : lo, undefined, { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; W.enemies.push(m); }
+            e.state = 'move'; e.cool = 1.5;
+          } else { e.state = 'dash'; e.st = 1.6; }
+        }
+        break;
+      case 'dash': {   // 端まで駆け抜ける。壁にぶつかると目を回す
+        e.vx = e.dir * 600 * sp; e.contactDmg = Math.round(e.d.dmg * 1.1);
+        if (Math.random() < 0.5) W.dust(e.x - e.dir * 50, e.y, 1);
+        if ((e.dir > 0 && e.x >= hi) || (e.dir < 0 && e.x <= lo)) { e.x = clamp(e.x, lo, hi); e.vx = 0; e.state = 'dizzy'; e.st = 1.8; W.shake = 10; Audio2.sfx('slam'); }
+        else if (e.st <= 0) { e.state = 'land'; e.st = 0.6; e.vx = 0; }
+        break;
+      }
+      case 'land': case 'dizzy': case 'stagger':
+        e.vx *= Math.pow(0.01, dt);
+        if (e.st <= 0) { e.state = 'move'; e.cool = rand(1.4, 2.2) / sp; }
+        break;
+      default: e.state = 'move';
+    }
   },
   golem(e, dt, dir, dist, P, W) {
     const rage = e.hp < e.maxHp * 0.5;
@@ -633,7 +703,7 @@ class Burst {
   update(dt) { this.life -= dt; this.dead = this.life <= 0; }
   draw(ctx, cam) {
     const k = 1 - this.life / this.max, a = SPRITE_DATA.heroine.burst, f = a.frames[0];
-    const s = (1.1 + k * 0.35) * HERO_SCALE;
+    const s = (1.1 + k * 0.35) * HERO_SCALE * HERO_SIZE;
     ctx.save(); ctx.translate(this.x - cam, GROUND_Y + 6); ctx.scale(this.face, 1);
     ctx.globalAlpha = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
     ctx.drawImage(IMG[a.img], f.x, f.y, f.w, f.h, -f.ax * s, -f.ay * s * (1 + k * 0.3), f.w * s, f.h * s * (1 + k * 0.3));

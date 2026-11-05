@@ -9,6 +9,8 @@ const GROUND_Y = 468;
 const RENDER_SCALE = 2;
 // 主人公の表示倍率。キックの行は元シートで大きめに描かれているので個別に補正
 const HERO_SCALE = 1.25;
+// 主人公の大きさ（素材の書き出しサイズ tools/extract_hero.py の TARGET_FIG_H と合わせる：300→264 で 0.88）
+const HERO_SIZE = 0.88;
 // 武器を持っている時の移動速度（重いほど遅い）
 const WEIGHT_SPEED = { S: 1.0, M: 0.88, L: 0.74 };
 const ANIM_SCALE = { kick: 0.77, swingS: 1.06, swingM: 1.06, swingL: 1.06, swingL2: 1.06 };

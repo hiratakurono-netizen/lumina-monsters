@@ -51,6 +51,6 @@ const DUNGEONS = {
 Object.assign(ENEMIES, {
   sprout:    { spr: 'sprout', scale: 0.9, hp: 26, dmg: 6, speed: 80, ai: 'hop', w: 50, h: 56, exp: 5 },
   wolf:      { spr: 'wolf', scale: 0.85, hp: 44, dmg: 10, speed: 150, ai: 'lunge', w: 70, h: 70, exp: 10 },
-  wolf_boss: { spr: 'wolf_l', scale: 1.05, hp: 520, dmg: 12, speed: 170, ai: 'lunge', w: 140, h: 140, exp: 80, boss: true, name: '草原の主 オオカミ（仮）' },
+  wolf_boss: { spr: 'wolf_l', scale: 1.05, hp: 520, dmg: 12, speed: 170, ai: 'wolfBoss', w: 140, h: 140, exp: 80, boss: true, name: '草原の主 オオカミ（仮）' },
   golem_moss:{ spr: 'golem', scale: 1.15, hp: 1200, dmg: 13, speed: 70, ai: 'golem', w: 170, h: 185, exp: 200, boss: true, name: '苔むした巨像（仮）' },
 });

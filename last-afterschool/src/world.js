@@ -160,7 +160,7 @@ class World {
   // 敵を作る。y を省くとその下の地面に立たせる。scale.hpMul / dmgMul で深い階ほど強く
   makeEnemy(type, x, y, scale) {
     const d = ENEMIES[type];
-    if (y === undefined) { const gy = this.terrain.groundBelow(x, -1000, 0); y = d.fly ? GROUND_Y - 180 : (gy < Infinity ? gy : GROUND_Y); }
+    if (y === undefined) { const gy = this.terrain.groundBelow(x, -1000, 0, !!d.boss); y = d.fly ? GROUND_Y - 180 : (gy < Infinity ? gy : GROUND_Y); }
     const e = new Enemy(this, type, x, y);
     if (scale && scale.hpMul) { e.hp = e.maxHp = Math.round(d.hp * scale.hpMul); }
     if (scale && scale.dmgMul) e.dmgMul = scale.dmgMul;
@@ -170,10 +170,11 @@ class World {
   // ---------------- combat ----------------
   playerHit(P, h, atk) {
     const def = atk.def, el = P.element, E = ELEMENTS[el];
-    const b = h.box.map(v => v * HERO_SCALE);
+    const b = h.box.map(v => v * HERO_SCALE * HERO_SIZE);
     const box = P.face > 0 ? [P.x + b[0], P.y + b[1], P.x + b[2], P.y + b[3]] : [P.x - b[2], P.y + b[1], P.x - b[0], P.y + b[3]];
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2, r = Math.max(40, (box[2] - box[0]) * 0.45);
-    if (el !== 'none' && atk.key !== 'kick') this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
+    // 斬撃のエフェクト：属性なしでも出す（新しい振りの絵には斬撃が描かれていないため）
+    if (atk.key !== 'kick') this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
     // 紫の爆発エフェクトは必殺専用（その技の最後の一撃で出す）
     if (atk.special && h === def.hits[def.hits.length - 1]) {
       this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el)); this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);

@@ -32,7 +32,7 @@ SIZE_FIX = {'bat': 1.06, 'chair': 1.17, 'desk': 1.05}
 # 元の素材で机が縦にまっすぐ切れているコマ（机の5・6コマ目）は使わない
 DROP = {'desk': (5, 6)}
 SMART_SPLIT = ('hero_kick.jpg',)
-TARGET_FIG_H = 300   # idle figure height in the saved sprite (= 150 world px at scale 0.5)
+TARGET_FIG_H = 264   # 待機の身長（保存サイズ）。ゲーム内では0.5倍＝132。主人公の大きさを変える時はここと config.js の HERO_SIZE を合わせる
 WORLD_SCALE = 0.5
 WEAPON_ANIMS = ('bat', 'chair', 'desk')
 FLIP = ()                # 反転すると敵に背を向けて振る絵になるので、どのシートも元の向きのまま使う
