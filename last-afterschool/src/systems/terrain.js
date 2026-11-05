@@ -56,7 +56,30 @@ class Terrain {
   }
 
   // 素材の地面（上に草、下に土の帯）を敷き詰める。すり抜け床は草の縁だけの薄い足場
+  // 素材の帯は左右の端の絵がつながらないので、「そのまま＋左右反転」を1組にして敷く（継ぎ目が鏡合わせで一致する）
+  static mirrored(im) {
+    if (!im || !im.width) return im;
+    Terrain._mir = Terrain._mir || new Map();
+    if (!Terrain._mir.has(im)) {
+      const c = document.createElement('canvas'); c.width = im.width * 2; c.height = im.height;
+      const x = c.getContext('2d'); x.drawImage(im, 0, 0); x.translate(im.width * 2, 0); x.scale(-1, 1); x.drawImage(im, 0, 0);
+      Terrain._mir.set(im, c);
+    }
+    return Terrain._mir.get(im);
+  }
+  static soilColor(im) {   // 帯の下の方の平均色（少し暗く）
+    Terrain._soil = Terrain._soil || new Map();
+    if (!Terrain._soil.has(im)) {
+      const c = document.createElement('canvas'); c.width = im.width; c.height = 6; const x = c.getContext('2d');
+      x.drawImage(im, 0, im.height - 6, im.width, 6, 0, 0, im.width, 6);
+      const d = x.getImageData(0, 0, im.width, 6).data; let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      Terrain._soil.set(im, [r / n * 0.8 | 0, g / n * 0.8 | 0, b / n * 0.8 | 0]);
+    }
+    return Terrain._soil.get(im);
+  }
   drawTextured(ctx, cam, tex, owTex) {
+    tex = Terrain.mirrored(tex); owTex = Terrain.mirrored(owTex);
     const TW = tex.width, top = Math.min(26, tex.height), soil = tex.height > 50 ? [30, tex.height - 30] : [Math.floor(tex.height / 2), Math.ceil(tex.height / 2)];
     for (const s of this.solids) {
       const x0 = Math.round(s.x - cam), y = Math.round(s.y);
@@ -74,8 +97,10 @@ class Terrain {
         const h = Math.min(s.h, VIEW_H - y + 20);
         for (let x = x0 - sx0; x < x0 + s.w; x += TW) {
           ctx.drawImage(tex, x, y - 6);
-          for (let yy = y - 6 + tex.height; yy < y + h; yy += soil[1]) ctx.drawImage(tex, 0, soil[0], TW, soil[1], x, yy, TW, soil[1]);
+          if (tex.height >= 60) for (let yy = y - 6 + tex.height; yy < y + h; yy += soil[1]) ctx.drawImage(tex, 0, soil[0], TW, soil[1], x, yy, TW, soil[1]);
         }
+        // 細い地面の帯（砂漠〜魔王城）は、帯の下を土の色で塗る（帯をくり返すと横じまになるため）
+        if (tex.height < 60) { const [r, g, b] = Terrain.soilColor(tex); const gr = ctx.createLinearGradient(0, y - 6 + tex.height, 0, y + h); gr.addColorStop(0, `rgb(${r},${g},${b})`); gr.addColorStop(1, `rgb(${r * 0.55 | 0},${g * 0.55 | 0},${b * 0.55 | 0})`); ctx.fillStyle = gr; ctx.fillRect(x0, y - 7 + tex.height, s.w, h); }
         // 雪原の特殊な床：氷（青い光沢）・深雪（白く盛り上がる）
         if (s.surface === 'ice') { ctx.fillStyle = 'rgba(170,225,255,.55)'; ctx.fillRect(x0, y - 6, s.w, 12); ctx.fillStyle = 'rgba(255,255,255,.75)'; for (let i = 20; i < s.w; i += 70) ctx.fillRect(x0 + i, y - 4, 26, 2); }
         if (s.surface === 'snow') { ctx.fillStyle = '#f4fbff'; for (let i = 0; i < s.w; i += 22) { ctx.beginPath(); ctx.ellipse(x0 + i + 11, y - 4, 14, 7, 0, Math.PI, 0); ctx.fill(); } }

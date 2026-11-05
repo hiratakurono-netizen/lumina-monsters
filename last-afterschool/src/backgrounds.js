@@ -230,30 +230,59 @@ const Backgrounds = (() => {
     const floor = floorTile([['#0e0818', 0, 72]]);
     return { sky: s, layers: [{ img: tile, f: 0.25, y: 0 }], floor, ambient: 'mote' };
   }
-  // 砂漠・雪原・火山：素材の帯（空＋奥から手前へ2〜3枚）を縦に重ね、手前ほど速く流す
-  function biomeArt(name, n, k = 1.25, overlap = 0.55, feather = true) {
+  // 砂漠〜魔王城：素材の帯を「空 → 奥の山 → … → 手前」の順に重ねる。
+  // 帯は extract_biomes.py で地形のシルエットに切り抜いてある。各帯の下端は地面まで伸ばして、すき間（黒）を作らない
+  function biomeArt(name, n, opts = {}) {
     const sky = IMG[ENV[`${name}_sky`]]; if (!sky || !sky.width) return null;
-    const layers = [];
-    for (let i = 0; i < n; i++) layers.push(IMG[ENV[`${name}_layer${i}`]]);
-    const mirror = im => {   // 左右反転をつなげて継ぎ目なく流す
-      const w = Math.round(im.width * k), h = Math.round(im.height * k), [c, x] = cv(w * 2, h);
-      x.drawImage(im, 0, 0, w, h); x.save(); x.translate(w * 2, 0); x.scale(-1, 1); x.drawImage(im, 0, 0, w, h); x.restore();
-      // 帯の上側をぼかして、奥の帯や空となじませる（帯の境目の横線を消す）
-      if (!feather) return c;
-      x.globalCompositeOperation = 'destination-in';
-      const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.4, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,1)');
-      x.fillStyle = g; x.fillRect(0, 0, w * 2, h);
+    const layers = []; for (let i = 0; i < n; i++) layers.push(IMG[ENV[`${name}_layer${i}`]]);
+    const BOTTOM = GROUND_Y + 14;
+    // 画像の一番下の行の平均色（帯を地面まで伸ばす時・穴の底の色に使う）
+    const bottomColor = (im, rows = 3) => {
+      const [c, x] = cv(im.width, rows); x.drawImage(im, 0, im.height - rows, im.width, rows, 0, 0, im.width, rows);
+      const d = x.getImageData(0, 0, im.width, rows).data; let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      return n ? [r / n | 0, g / n | 0, b / n | 0] : [20, 16, 30];
+    };
+    // 左右反転をつなげて継ぎ目なく流す。extend＝下に伸ばす高さ（帯の一番下の行を引き伸ばす）
+    const tile = (im, k, extend = 0) => {
+      const w = Math.round(im.width * k), h = Math.round(im.height * k), [c, x] = cv(w * 2, h + extend);
+      x.imageSmoothingEnabled = false;
+      for (const flip of [false, true]) {
+        x.save(); if (flip) { x.translate(w * 2, 0); x.scale(-1, 1); }
+        x.drawImage(im, 0, 0, w, h);
+        x.restore();
+      }
+      if (extend > 0) { const [r, g, b] = bottomColor(im); x.fillStyle = `rgb(${r},${g},${b})`; x.fillRect(0, h - 1, w * 2, extend + 1); }
       return c;
     };
-    // 手前の帯の下端を地面に合わせ、奥の帯ほど上に（少し重ねて）置く
-    const out = []; let bottom = GROUND_Y + 14;
-    for (let i = n - 1; i >= 0; i--) {
-      const img = mirror(layers[i]); out.unshift({ img, f: 0.12 + 0.18 * i, y: bottom - img.height });
-      bottom = bottom - img.height * overlap;
+    const [s, sx] = cv(VIEW_W, VIEW_H); sx.imageSmoothingEnabled = false;
+    const out = [];
+    if (opts.picture) {
+      // 城内：帯を1枚の絵として上から積み、同じ速さで流す（壁の段差が別々に動かない）
+      const total = layers.reduce((t, l) => t + l.height, 0), k = BOTTOM / total;
+      const [c, x] = cv(Math.round(layers[0].width * k) * 2, BOTTOM); let y = 0;
+      for (const l of layers) { const t = tile(l, k); x.drawImage(t, 0, Math.round(y)); y += l.height * k; }
+      sx.fillStyle = '#1a1424'; sx.fillRect(0, 0, VIEW_W, VIEW_H);
+      out.push({ img: c, f: 0.4, y: 0 });
+    } else {
+      const k = Math.max(VIEW_W / sky.width, 1.3);
+      // 空：画面の上に置き、下は空の一番下の色で地面まで伸ばす
+      // 空は一番奥の帯の上半分が隠れるところまで縦に伸ばす（下を引き伸ばすと縦すじが出るため）。その下は平均色
+      const farTop = BOTTOM - layers.reduce((t, l, i) => t + l.height * k * (i === n - 1 ? 1 : (opts.overlap || 0.5)), 0);
+      const skyH = Math.max(sky.height * k, farTop + layers[0].height * k * 0.6);
+      const [sr, sg, sb] = bottomColor(sky); sx.fillStyle = `rgb(${sr},${sg},${sb})`; sx.fillRect(0, 0, VIEW_W, VIEW_H);
+      sx.drawImage(sky, 0, 0, sky.width, sky.height, 0, 0, sky.width * k, skyH);
+      // 手前の帯ほど下・速く。奥の帯の下半分は手前の帯に隠れる
+      let bottom = BOTTOM; const f = opts.speeds || [0.12, 0.25, 0.42].slice(3 - n);
+      for (let i = n - 1; i >= 0; i--) {
+        const h = layers[i].height * k, y = Math.round(bottom - h);
+        out.unshift({ img: tile(layers[i], k, BOTTOM - (y + Math.round(h))), f: f[i], y });
+        bottom = bottom - h * (opts.overlap || 0.5);
+      }
     }
-    const [s, sx] = cv(VIEW_W, VIEW_H);
-    sx.drawImage(sky, 0, 0, sky.width, sky.height, 0, 0, VIEW_W, Math.max(bottom + 40, sky.height * k));
-    return { sky: s, layers: out, floor: floorTile([['#1a1018', 0, 72]]), ambient: { snow: 'snowfall', volcano: 'ember', desert: 'sand', castle_out: 'ash', castle_in: 'dust' }[name] || 'mote' };
+    const nb = bottomColor(layers[layers.length - 1]);
+    const floor = floorTile([['#0c0810', 0, 72]], fx => { const g = fx.createLinearGradient(0, 0, 0, 72); g.addColorStop(0, `rgb(${nb[0] * 0.45 | 0},${nb[1] * 0.45 | 0},${nb[2] * 0.45 | 0})`); g.addColorStop(1, '#08060c'); fx.fillStyle = g; fx.fillRect(0, 0, 1920, 72); });   // 穴の底：手前の地面を暗くした色
+    return { sky: s, layers: out, floor, ambient: { snow: 'snowfall', volcano: 'ember', desert: 'sand', castle_out: 'ash', castle_in: 'dust' }[name] || 'mote' };
   }
   // 町・学校：3本の帯（遠景・中景・近景）は1枚の絵を横に切ったもの。上から順に積み、近景の下端を地面に合わせる
   function stackedArt(name, opts = {}) {
@@ -319,7 +348,7 @@ const Backgrounds = (() => {
       street, schoolyard, corridor, homeec, town, grassland,
       rooftop: () => rooftop(false),
       desert: () => biomeArt('desert', 2), snow: () => biomeArt('snow', 3), volcano: () => biomeArt('volcano', 3),
-      castle_out: () => biomeArt('castle_out', 3), castle_in: () => biomeArt('castle_in', 2, 2.45, 0.97, false),   // 城内：広間の帯を大きくして画面を埋める
+      castle_out: () => biomeArt('castle_out', 3), castle_in: () => biomeArt('castle_in', 2, { picture: true }),   // 城内：回廊と広間を1枚の絵として
       rooftop_calm: () => rooftop(true),
     })[name]();
     return cache[name];
