@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>さいごの放課後 仕様書</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  :root { --ink: #22203a; --sub: #5b5878; --line: #d6d2e6; --acc: #5b3fa8; --soft: #f3f0fa; --warn: #a8402f; }
+  body { font-family: 'IPAPGothic', 'IPAGothic', sans-serif; color: var(--ink); font-size: 10pt; line-height: 1.65; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 2mm; color: var(--acc); letter-spacing: .05em; }
+  .subt { color: var(--sub); font-size: 10.5pt; margin-bottom: 6mm; }
+  h2 { font-size: 14pt; color: var(--acc); border-bottom: 2px solid var(--acc); padding-bottom: 1mm; margin: 8mm 0 3mm; page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 4mm 0 1.5mm; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 9pt; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 1.4mm 2mm; text-align: left; vertical-align: top; }
+  th { background: var(--soft); color: var(--acc); font-weight: normal; white-space: nowrap; }
+  ul { margin: 1mm 0 2mm; padding-left: 5mm; } li { margin: .6mm 0; }
+  .meta { display: grid; grid-template-columns: auto 1fr; gap: 1mm 5mm; font-size: 9.5pt; background: var(--soft); padding: 3mm 4mm; border-radius: 2mm; }
+  .meta b { color: var(--acc); font-weight: normal; }
+  .tag { display: inline-block; font-size: 8pt; padding: 0 1.5mm; border-radius: 1mm; background: #ece6fb; color: var(--acc); margin-right: 1mm; }
+  .pri-h { background: #fbe4df; color: var(--warn); } .pri-m { background: #fdf0d8; color: #8a5a10; } .pri-l { background: #e3f1e6; color: #2e6b3e; }
+  .toc { columns: 2; font-size: 9.5pt; }
+  .pb { page-break-before: always; }
+  .note { color: var(--sub); font-size: 8.5pt; }
+</style></head><body>
+
+<h1>さいごの放課後（仮題）</h1>
+<div class="subt">THE LAST AFTERSCHOOL — 現状仕様書・未決事項・今後のアイデア ／ 2026年11月時点</div>
+<div class="meta">
+  <b>ジャンル</b><span>2D横スクロール ハクスラアクションRPG（ドット絵）</span>
+  <b>コンセプト</b><span>「可愛い女の子がド派手にでかい武器を振り回すのってかわいいよね」。可愛い見た目の裏で、もの悲しい物語。</span>
+  <b>対象</b><span>スマートフォン横持ちのブラウザゲーム（PC・ゲームパッドにも対応）</span>
+  <b>公開URL</b><span>https://hiratakurono-netizen.github.io/lumina-monsters/last-afterschool/</span>
+  <b>開発ブランチ</b><span>claude/pixel-girl-2d-battle-game-gtfysc（フォルダ last-afterschool/）</span>
+</div>
+
+<h2>1. 全体の流れ</h2>
+<ul>
+  <li><b>プロローグ兼チュートリアル</b>（STAGE 1〜5）→ <b>現世の町</b>（拠点）⇄ <b>魔界ダンジョン</b>（5か所×10階＝全50階）</li>
+  <li>町で準備 → 魔界で探索・戦闘 → 戦利品を持ち帰る → 装備を強化 → さらに奥へ</li>
+  <li>タイトル：はじめから（本編開始後は確認あり）／つづきから／ステージセレクト／オプション／あそびかた</li>
+</ul>
+
+<h2>2. 操作</h2>
+<table>
+<tr><th>操作</th><th>キーボード</th><th>スマホ</th><th>内容</th></tr>
+<tr><td>移動・ダッシュ</td><td>←→ ／ Shift</td><td>◀▶ ／ ダッシュ（切替式）</td><td>武器が重いほど遅い（小100%・中88%・大74%）</td></tr>
+<tr><td>ジャンプ</td><td>C / Space</td><td>ジャンプ</td><td>空中2段ジャンプ。↓＋ジャンプですり抜け床から降りる</td></tr>
+<tr><td>攻撃・キック</td><td>Z ／ X</td><td>攻撃 ／ キック</td><td>武器ごとのコンボ。キックで攻撃の後半をキャンセル</td></tr>
+<tr><td>必殺</td><td>V</td><td>必殺</td><td>「フルスイング」MP25。持っている武器で出る（机のみ2段）</td></tr>
+<tr><td>ガード・回避</td><td>G / F ＋ ←→</td><td>ガード ＋ ◀▶</td><td>正面の攻撃を30%に軽減。横入力で無敵の緊急回避（空中でも1回）。武器がない時は使えない</td></tr>
+<tr><td>武器切替・道具</td><td>Q ／ I</td><td>武器 ／ 道具</td><td>道具はダンジョンのみ</td></tr>
+<tr><td>しらべる・ポーズ</td><td>↓ ／ Esc</td><td>しらべる ／ II</td><td>しらべるは町で施設の近くだけ表示</td></tr>
+</table>
+
+<h2>3. プロローグ（チュートリアル）</h2>
+<table>
+<tr><th>STAGE</th><th>内容</th><th>覚えること</th></tr>
+<tr><td>1 いつもの日常</td><td>通学路。猫・異常気象のニュース・クレープ屋・空のひび</td><td>移動</td></tr>
+<tr><td>2 学校への襲撃</td><td>校庭にモンスター。勝てない戦い</td><td>キック</td></tr>
+<tr><td>3 相棒との出会い</td><td>相棒ルゥが現れ「武器化」の力を授ける。砂纏いのバット</td><td>攻撃・必殺・武器切替</td></tr>
+<tr><td>4-1 校舎 ／ 4-2 家庭科室</td><td>椅子・机を武器化。コンロの炎を全武器に付与。ゴースト</td><td>武器の使い分け・属性</td></tr>
+<tr><td>4-3 屋上</td><td>ボス「瓦礫の番人 ガレキゴーレム」</td><td>予備動作を見て避ける</td></tr>
+<tr><td>5 三つの世界</td><td>現世・魔界・神界の話。夕焼けの屋上 → 町へ</td><td>—</td></tr>
+</table>
+
+<h2>4. 現世の町（拠点）</h2>
+<table>
+<tr><th>場所</th><th>できること</th></tr>
+<tr><td>自宅</td><td>装備（中央に主人公・左右に装備枠・右にアイコン一覧・比較表示）、ステータス、セーブ（保存・書き出し・読み込み）</td></tr>
+<tr><td>コンビニ</td><td>消耗品（進行で解禁）、装備5品（帰還のたびに入れ替わる）、売却</td></tr>
+<tr><td>鍛冶屋</td><td>準備中（建物のみ）</td></tr>
+<tr><td>親友ミオ</td><td>会話（表情6種）</td></tr>
+<tr><td>学校の屋上</td><td>魔界へのゲート。ダンジョンと開始階（1階／6階）を選ぶ</td></tr>
+</table>
+
+<h2 class="pb">5. 魔界ダンジョン</h2>
+<h3>5-1. 共通ルール</h3>
+<ul>
+  <li>各階は手作りの部屋パーツを乱数で並べて生成（平地・段差・穴・丘・足場渡り・寄り道・キノコばね・戦闘部屋）。出口まで到達できるか自動チェックし、だめなら作り直す</li>
+  <li>5階：中ボス（倒すとHP全回復・帰還か続行を選ぶ・次回から6階開始可）、10階：ボス（踏破で次のダンジョン解放）</li>
+  <li>帰還：5階・10階の出口、または帰還の鈴。倒れた時：その潜入で拾ったゴールドの1/3を失う（装備・道具は失わない）</li>
+  <li>難しさは「深さ」（草原1〜10 … 魔王城41〜50）で決まる：敵のHP・攻撃、ドロップのレアリティ、ショップの品ぞろえ</li>
+  <li>穴に落ちると最大HPの15%のダメージで直前の足場へ</li>
+</ul>
+<h3>5-2. ダンジョンごとの特徴</h3>
+<table>
+<tr><th>ダンジョン</th><th>環境ルール・仕掛け</th><th>5階ボス</th><th>10階ボス（攻略の鍵）</th></tr>
+<tr><td>草原</td><td>制限なし。たき火（炎30秒）、草むら、キノコのばね</td><td>草原の主 オオカミ</td><td>苔むした巨像（苔の鎧を炎で焼く。部屋にたき火）</td></tr>
+<tr><td>砂漠</td><td>水分ゲージ（水1本約2分）→ 熱中症3段階。オアシス、サボテン（叩くと砂属性）</td><td>砂の女王 オオサソリ</td><td>砂に眠る巨人（砂の槍）</td></tr>
+<tr><td>雪原</td><td>ジャンプ力約75%、氷の床（滑る）、深雪（60%）、氷晶（叩くと氷属性）</td><td>氷牙の狼王</td><td>霜竜（氷の鎧を炎で溶かす）</td></tr>
+<tr><td>火山</td><td>各階3分の制限時間（敵撃破+2秒・冷却材+30秒・冷気の噴出口+15秒）。時間切れでHP減少、溶岩だまり</td><td>炎の死神</td><td>溶岩の巨像（溶岩の鎧を氷で冷やす）</td></tr>
+<tr><td>魔王城</td><td>1〜5階は外郭（深淵の裂け目）、6〜10階は城内（燭台で炎）。敵の強さ中心</td><td>動く城門</td><td>魔王（結界は炎か氷で破る。HP半分で闇の弾と近衛騎士）</td></tr>
+</table>
+
+<h2>6. 戦闘・武器</h2>
+<table>
+<tr><th>系統</th><th>コンボ</th><th>主な武器</th></tr>
+<tr><td>バット（小）</td><td>1撃（振り抜き）</td><td>木製バット・鉄パイプ・金属バット・デッキブラシ・フライパン</td></tr>
+<tr><td>椅子（中）</td><td>2連（横振り → 叩きつけ）</td><td>教室の椅子・パイプ椅子・丸椅子</td></tr>
+<tr><td>机（大）</td><td>1撃（振り上げ → 叩きつけ）</td><td>教室の机・教卓・実験台</td></tr>
+<tr><td>短剣</td><td>4連（突き・低い突き・突き上げ・踏み込み）</td><td>包丁・石／氷鉄／黒曜石／魔王の牙・暗黒の短剣</td></tr>
+<tr><td>剣</td><td>3連（振り下ろし・横なぎ・斬り上げ）</td><td>石の剣・霜の魔剣・マグマブレード・魔王の魔剣・魔王剣</td></tr>
+<tr><td>斧</td><td>2連（横なぎ・叩きつけ）</td><td>石の斧・氷晶の戦斧・火山の斧・魔王の破砕斧</td></tr>
+</table>
+<ul>
+  <li>モーションは「手ぶらの振り」に武器の絵を手の位置で重ねる方式（武器ごとの見た目を表示）</li>
+  <li>属性：砂（ひるみ延長）・炎（ダメージ増・燃焼・ゴースト特効）・氷（足止め・鈍化）。環境物で一時的に付与（30秒）</li>
+  <li>演出：ヒットストップ・画面揺れ・斬撃と振りの軌跡・ダメージ数値・コンボ数・必殺の爆発</li>
+</ul>
+
+<h2>7. 装備・成長・ドロップ</h2>
+<ul>
+  <li>装備枠：武器3・防具1・アクセサリー2。所持品は装備30個まで、消耗品は種類ごとに上限</li>
+  <li>レアリティ5段階（コモン → アンコモン → レア → エピック → レジェンド）。付与効果：攻撃力・攻撃速度・会心・HP・防御・移動・HP吸収・必殺MP軽減・属性</li>
+  <li>ドロップ：通常の敵7%、宝箱50%、隠し宝箱は必ず（アンコモン以上）、5階ボス2個、10階ボス2個（レア以上・15%でレジェンド）</li>
+  <li>成長：レベルで最大HPと攻撃が上がる。必要経験値 20＋10×Lv＋6×Lv²、レベルアップで最大HPの10%回復</li>
+  <li>消耗品：いちごミルク・お弁当・水・冷却材・帰還の鈴・力のキャンディ（その潜入中 攻撃+20%）</li>
+  <li>セーブ：ブラウザに自動保存（v2・旧データ自動移行）。書き出し／読み込みで端末の消失に備える</li>
+</ul>
+
+<h2 class="pb">8. 未決事項</h2>
+<table>
+<tr><th>優先</th><th>項目</th><th>内容・決めてほしいこと</th></tr>
+<tr><td><span class="tag pri-h">高</span></td><td>全体の難易度</td><td>草原以降を実際の装備で通しプレイしていない。敵・ボスの強さ、成長速度、ドロップ量、1階の長さはすべて仮。プレイテストの感想が必要</td></tr>
+<tr><td><span class="tag pri-h">高</span></td><td>エンディング・本編ストーリー</td><td>魔王撃破後は短い仮の場面のみ。原案（エンディング1／TRUEルート、神界、相棒の正体、STAGE 6以降）をどう組み込むか</td></tr>
+<tr><td><span class="tag pri-h">高</span></td><td>ボスの名前・設定</td><td>10体すべて「（仮）」。名前・見た目の差別化（今は既存モンスター絵の流用と色替え）</td></tr>
+<tr><td><span class="tag pri-m">中</span></td><td>鍛冶屋</td><td>強化・分解・素材の仕様（素材を何で集めるか、強化の上限、失敗の有無）</td></tr>
+<tr><td><span class="tag pri-m">中</span></td><td>町のイベント・NPC</td><td>ミオ以外の住人、本編中の会話イベント、進行に応じた町の変化</td></tr>
+<tr><td><span class="tag pri-m">中</span></td><td>BGM・効果音</td><td>BGMは Lumina Monsters の流用。ダンジョンごとの曲、ボス曲、エンディング曲</td></tr>
+<tr><td><span class="tag pri-m">中</span></td><td>名前</td><td>タイトル「さいごの放課後」、ユキ・ルゥ・ミオ、町の名前「宵ヶ丘」はすべて仮</td></tr>
+<tr><td><span class="tag pri-m">中</span></td><td>敵の動き</td><td>敵は1枚絵をプログラムで揺らしている。アニメーション素材を用意するか</td></tr>
+<tr><td><span class="tag pri-l">低</span></td><td>相棒の絵</td><td>モンスターシートの白い竜を流用。専用の立ち絵・会話の顔</td></tr>
+<tr><td><span class="tag pri-l">低</span></td><td>武器を持った歩き・走り</td><td>今は歩き・走りで武器をしまう。持ち歩きモーションを作るか</td></tr>
+<tr><td><span class="tag pri-l">低</span></td><td>未使用の素材</td><td>新しい町・学校の背景（元に戻した）、オベリスク・塔・かまくら・炉・家具類。使い道</td></tr>
+<tr><td><span class="tag pri-l">低</span></td><td>数値の細部</td><td>攻撃の当たるタイミング、値段、所持上限30、ドロップ率</td></tr>
+<tr><td><span class="tag pri-l">低</span></td><td>確認残り</td><td>雪原の氷の床の画面確認、iPhone 実機での音・操作の最終確認</td></tr>
+</table>
+
+<h2>9. 今後実装すると面白くなりそうなアイデア</h2>
+<h3>9-1. ハクスラの中毒性</h3>
+<ul>
+  <li><b>鍛冶屋の強化 +1〜+10</b>：ダンジョンの素材と組み合わせ、+7以上で見た目が光る。分解で素材に戻せる</li>
+  <li><b>レジェンド固有効果</b>：「3コンボ目が必ず会心」「ガード成功で衝撃波」など、遊び方が変わる効果</li>
+  <li><b>セット装備</b>：同じダンジョンの装備を揃えるとボーナス（例：火山セットで溶岩無効）</li>
+  <li><b>エリート敵</b>：名前つき・付与効果持ちで光る敵。良い装備を落としやすい</li>
+  <li><b>深さ51以降のエンドレス「深淵」</b>：クリア後のやり込み。到達階を記録</li>
+</ul>
+<h3>9-2. 戦闘の手触り</h3>
+<ul>
+  <li><b>属性の組み合わせ反応</b>：凍った敵を炎で叩くと「蒸気爆発」、砂で目つぶし中に会心が出やすい など</li>
+  <li><b>武器系統ごとの必殺</b>：短剣は連続突き、斧は大回転など、フルスイング以外の見せ場</li>
+  <li><b>ジャストガード・ジャスト回避</b>：直前の入力でスローモーション＋反撃ボーナス</li>
+  <li><b>敵が落とす武器を拾ってその場で使う</b>（耐久つき）。原案の「周囲の物を使う」の発展</li>
+  <li><b>コンボ評価</b>（C〜S）でゴールドや経験値にボーナス</li>
+</ul>
+<h3>9-3. 物語と世界観</h3>
+<ul>
+  <li><b>ミオとの約束イベント</b>：ダンジョンを進めるたびに町の会話が変わり、クレープの約束へつながる</li>
+  <li><b>魔界の住人</b>：ダンジョン内の休憩部屋にいる、戦わないモンスターとの会話（原案の「魔界にも暮らしがある」）</li>
+  <li><b>相棒の記憶のかけら</b>：各ボスが落とし、集めると相棒の正体と神界の話が明かされる（TRUEルートの条件）</li>
+  <li><b>空のひびの変化</b>：攻略が進むと町の空のひびが広がる／閉じる。プレイの結果が景色に残る</li>
+</ul>
+<h3>9-4. 遊びやすさ・続ける理由</h3>
+<ul>
+  <li>モンスター図鑑・装備図鑑、実績、プレイ記録（倒した数・最大コンボ）</li>
+  <li>スマホの振動（ヒット時・ボスの叩きつけ）、ボタン配置のカスタマイズ</li>
+  <li>デイリーダンジョン（日替わりのシードで全員同じ階を遊ぶ）</li>
+</ul>
+
+<h2>10. 技術メモ</h2>
+<ul>
+  <li>HTML5 Canvas＋素の JavaScript（ビルド不要）。内部描画 1920×1080、ゲーム座標 960×540</li>
+  <li>主なファイル：<span class="note">src/config.js（武器・プロローグ）、src/data/（装備・ダンジョン・ドロップ）、src/systems/（地形・セーブ・所持品・ステータス）、src/dungeon/（生成・進行）、src/town/（町）、src/ui/（メニュー）、tools/（素材切り出し）</span></li>
+  <li>素材は tools/extract_*.py で切り出し（緑背景・単色背景の自動抜き、コマ分割、手の位置の記録）</li>
+  <li>詳細な設計：docs/MAIN_GAME_PLAN.md、docs/MAIN_GAME_SPEC.md</li>
+</ul>
+</body></html>
