@@ -39,7 +39,7 @@ const RARITY_BY_ID = Object.fromEntries(RARITIES.map((r, i) => [r.id, Object.ass
 
 // 武器の攻撃力は「基準値」に対する倍率で、今の攻撃の当たり（WEAPONS の dmg）に掛かる。
 // 基準値＝プロローグの武器の強さ（バット14・椅子20・机30）
-const WEAPON_TYPE_REF = { bat: 14, chair: 20, desk: 30 };
+const WEAPON_TYPE_REF = { bat: 14, chair: 20, desk: 30, dagger: 22, sword: 30, axe: 44 };
 
 const ITEM_BASES = {
   // ---- 武器：バット系（小・速い） ----
@@ -55,23 +55,23 @@ const ITEM_BASES = {
   w_desk_class: { kind: 'weapon', type: 'desk',  name: '教室の机',       atk: 30, price: 100, minFloor: 1 },
   w_desk_teach: { kind: 'weapon', type: 'desk',  name: '教卓',           atk: 36, price: 200, minFloor: 5 },
   w_desk_lab:   { kind: 'weapon', type: 'desk',  name: '理科室の実験台', atk: 42, price: 300, minFloor: 8 },
-  // ---- 魔界の武器（専用の振りモーションはまだないので、短剣＝バット系・剣＝椅子系・斧＝机系の振りを使う：仮） ----
+  // ---- 魔界の武器：短剣（4連）・剣（3連）・斧（2連）。振りは手ぶらのモーションに武器のアイコンを重ねる ----
   // minFloor は「深さ」（草原1〜10・砂漠11〜20・雪原21〜30・火山31〜40）。element は最初から付いている属性
-  w_stone_dagger:   { kind: 'weapon', type: 'bat',   name: '石の短剣',       atk: 22, price: 260, minFloor: 11 },
-  w_stone_sword:    { kind: 'weapon', type: 'chair', name: '石の剣',         atk: 30, price: 320, minFloor: 13 },
-  w_stone_axe:      { kind: 'weapon', type: 'desk',  name: '石の斧',         atk: 44, price: 400, minFloor: 15, element: 'sand' },
-  w_ice_dagger:     { kind: 'weapon', type: 'bat',   name: '氷鉄の短剣',     atk: 30, price: 520, minFloor: 21 },
-  w_frost_sword:    { kind: 'weapon', type: 'chair', name: '霜の魔剣',       atk: 42, price: 640, minFloor: 23, element: 'ice' },
-  w_ice_axe:        { kind: 'weapon', type: 'desk',  name: '氷晶の戦斧',     atk: 60, price: 780, minFloor: 25, element: 'ice' },
-  w_obsidian_dagger:{ kind: 'weapon', type: 'bat',   name: '黒曜石の短剣',   atk: 40, price: 900, minFloor: 31 },
-  w_magma_blade:    { kind: 'weapon', type: 'chair', name: 'マグマブレード', atk: 56, price: 1100, minFloor: 33, element: 'fire' },
-  w_volcano_axe:    { kind: 'weapon', type: 'desk',  name: '火山の斧',       atk: 80, price: 1300, minFloor: 35, element: 'fire' },
+  w_stone_dagger:   { kind: 'weapon', type: 'dagger',   name: '石の短剣',       atk: 22, price: 260, minFloor: 11 },
+  w_stone_sword:    { kind: 'weapon', type: 'sword', name: '石の剣',         atk: 30, price: 320, minFloor: 13 },
+  w_stone_axe:      { kind: 'weapon', type: 'axe',  name: '石の斧',         atk: 44, price: 400, minFloor: 15, element: 'sand' },
+  w_ice_dagger:     { kind: 'weapon', type: 'dagger',   name: '氷鉄の短剣',     atk: 30, price: 520, minFloor: 21 },
+  w_frost_sword:    { kind: 'weapon', type: 'sword', name: '霜の魔剣',       atk: 42, price: 640, minFloor: 23, element: 'ice' },
+  w_ice_axe:        { kind: 'weapon', type: 'axe',  name: '氷晶の戦斧',     atk: 60, price: 780, minFloor: 25, element: 'ice' },
+  w_obsidian_dagger:{ kind: 'weapon', type: 'dagger',   name: '黒曜石の短剣',   atk: 40, price: 900, minFloor: 31 },
+  w_magma_blade:    { kind: 'weapon', type: 'sword', name: 'マグマブレード', atk: 56, price: 1100, minFloor: 33, element: 'fire' },
+  w_volcano_axe:    { kind: 'weapon', type: 'axe',  name: '火山の斧',       atk: 80, price: 1300, minFloor: 35, element: 'fire' },
   // 魔王城（深さ41〜50）
-  w_fang_dagger:    { kind: 'weapon', type: 'bat',   name: '魔王の牙の短剣', atk: 52, price: 1600, minFloor: 41 },
-  w_demon_sword:    { kind: 'weapon', type: 'chair', name: '魔王の魔剣',     atk: 72, price: 1900, minFloor: 43 },
-  w_shatter_axe:    { kind: 'weapon', type: 'desk',  name: '魔王の破砕斧',   atk: 100, price: 2300, minFloor: 45 },
-  w_dark_dagger:    { kind: 'weapon', type: 'bat',   name: '魔王の暗黒短剣', atk: 60, price: 2400, minFloor: 46 },
-  w_king_sword:     { kind: 'weapon', type: 'chair', name: '魔王の魔王剣',   atk: 84, price: 2800, minFloor: 48 },
+  w_fang_dagger:    { kind: 'weapon', type: 'dagger',   name: '魔王の牙の短剣', atk: 52, price: 1600, minFloor: 41 },
+  w_demon_sword:    { kind: 'weapon', type: 'sword', name: '魔王の魔剣',     atk: 72, price: 1900, minFloor: 43 },
+  w_shatter_axe:    { kind: 'weapon', type: 'axe',  name: '魔王の破砕斧',   atk: 100, price: 2300, minFloor: 45 },
+  w_dark_dagger:    { kind: 'weapon', type: 'dagger',   name: '魔王の暗黒短剣', atk: 60, price: 2400, minFloor: 46 },
+  w_king_sword:     { kind: 'weapon', type: 'sword', name: '魔王の魔王剣',   atk: 84, price: 2800, minFloor: 48 },
   // ---- 防具（見た目は変わらない） ----
   a_uniform:    { kind: 'armor', name: '制服',             def: 0,  hp: 0,  price: 0,   minFloor: 99 },
   a_jersey:     { kind: 'armor', name: '学校ジャージ',     def: 6,  hp: 10, price: 120, minFloor: 1 },

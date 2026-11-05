@@ -153,7 +153,7 @@ class Player {
       if (a.ft >= def.frameMs[a.frame]) {
         a.ft = 0; a.frame++;
         if (a.frame >= def.frameMs.length) {
-          const nxt = a.queued ? (def.next || (a.special ? null : (a.key !== 'kick' ? a.key : null))) : null;
+          const nxt = a.queued && !def.last ? (def.next || (a.special ? null : (a.key !== 'kick' ? a.key : null))) : null;
           if (a.chainNext) { const c = a.chainNext; this.startAttack(c, { special: a.special }); }
           else if (nxt && control && a.key !== 'desk2') this.startAttack(nxt);
           else { this.atk = null; this.state = 'idle'; }
@@ -316,8 +316,23 @@ class Player {
     }
     drawHero(ctx, this.anim, this.frame, this.x - cam, this.y, this.face);
     ctx.globalAlpha = 1;
+    this.drawOverlayWeapon(ctx, cam);
     if (this.guarding) this.drawGuard(ctx, cam);
     if (this.atk) this.drawWeapon(ctx, cam);
+  }
+  // 手ぶらの振り（短剣・剣・斧）に、今の武器のアイコンを手の位置で重ねる
+  drawOverlayWeapon(ctx, cam) {
+    if (!this.anim.startsWith('swing_')) return;
+    const type = this.anim.slice(6), pose = HAND_POSE[type], it = this.item, im = it && it.icon && IMG[it.icon];
+    if (!pose || !im || !im.width) return;
+    const set = SPRITE_DATA.swing[type], k = set.scale, [hx, hy, ang] = pose[Math.min(this.frame, pose.length - 1)];
+    const [gx, gy, len] = ICON_GRIP[type], s = len / Math.hypot(im.width, im.height);
+    ctx.save();
+    ctx.translate(Math.round(this.x - cam + this.face * hx * k), Math.round(this.y - hy * k));
+    ctx.scale(this.face, 1);
+    ctx.rotate((ang + 45) * Math.PI / 180);   // アイコンは右上（-45度）を向いて描かれている
+    ctx.drawImage(im, -gx * im.width * s, -gy * im.height * s, im.width * s, im.height * s);
+    ctx.restore();
   }
   drawGuard(ctx, cam) {
     const x = this.x - cam + this.face * 30, y = this.y - 70;

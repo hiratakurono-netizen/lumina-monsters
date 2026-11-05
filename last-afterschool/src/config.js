@@ -86,6 +86,28 @@ const WEAPONS = {
     ],
     step: [30, 40, 0], cancelAt: 2,
   },
+  // ---- 短剣・剣・斧：手ぶらの振りモーションに、その武器のアイコンを手の位置で重ねる（HAND_POSE） ----
+  // 短剣：4連（突き → 低い突き → 突き上げ → 踏み込み突き）
+  dagger:  { name: '短剣', anim: 'swing_dagger', swing: 'dagger', size: 'S', overlay: true, next: 'dagger2',
+    frameMap: [0, 1, 2], frameMs: [40, 50, 110], hits: [{ frame: 2, dmg: 9, box: [-10, -140, 120, -20], kb: 120, stop: 40 }], step: [0, 40, 60], cancelAt: 2 },
+  dagger2: { name: '短剣', anim: 'swing_dagger', swing: 'dagger', size: 'S', overlay: true, next: 'dagger3', hidden: true,
+    frameMap: [3, 3], frameMs: [50, 90], hits: [{ frame: 0, dmg: 9, box: [-10, -110, 115, -5], kb: 120, stop: 40 }], step: [40, 0], cancelAt: 1 },
+  dagger3: { name: '短剣', anim: 'swing_dagger', swing: 'dagger', size: 'S', overlay: true, next: 'dagger4', hidden: true,
+    frameMap: [4, 4], frameMs: [60, 110], hits: [{ frame: 0, dmg: 11, box: [-20, -175, 110, -40], kb: 120, launch: 320, stop: 60, shake: 3 }], step: [30, 0], cancelAt: 1 },
+  dagger4: { name: '短剣', anim: 'swing_dagger', swing: 'dagger', size: 'S', overlay: true, last: true, hidden: true,
+    frameMap: [5, 6, 7], frameMs: [70, 90, 140], hits: [{ frame: 0, dmg: 15, box: [-10, -140, 140, -10], kb: 300, stop: 70, shake: 5 }], step: [90, 20, 0], cancelAt: 2 },
+  // 剣：3連（振り下ろし → 横なぎ → 斬り上げ）
+  sword:   { name: '剣', anim: 'swing_sword', swing: 'sword', size: 'M', overlay: true, next: 'sword2',
+    frameMap: [0, 1, 2, 3], frameMs: [50, 90, 70, 110], hits: [{ frame: 2, dmg: 15, box: [-20, -170, 140, -5], kb: 200, stop: 60, shake: 3 }], step: [0, 0, 60, 20], cancelAt: 3 },
+  sword2:  { name: '剣', anim: 'swing_sword', swing: 'sword', size: 'M', overlay: true, next: 'sword3', hidden: true,
+    frameMap: [4, 5], frameMs: [90, 120], hits: [{ frame: 0, dmg: 17, box: [-40, -150, 150, -40], kb: 240, stop: 60, shake: 4 }], step: [50, 0], cancelAt: 1 },
+  sword3:  { name: '剣', anim: 'swing_sword', swing: 'sword', size: 'M', overlay: true, last: true, hidden: true,
+    frameMap: [6, 7], frameMs: [110, 170], hits: [{ frame: 0, dmg: 22, box: [-10, -190, 150, -10], kb: 260, launch: 340, stop: 90, shake: 6 }], step: [60, 0], cancelAt: 1 },
+  // 斧：2連（横なぎ → 振りかぶって叩きつけ）
+  axe:     { name: '斧', anim: 'swing_axe', swing: 'axe', size: 'L', overlay: true, next: 'axe2',
+    frameMap: [0, 1, 2, 3], frameMs: [80, 160, 80, 150], hits: [{ frame: 2, dmg: 26, box: [-30, -170, 170, -10], kb: 380, stop: 100, shake: 8 }], step: [0, 0, 50, 0], cancelAt: 3 },
+  axe2:    { name: '斧', anim: 'swing_axe', swing: 'axe', size: 'L', overlay: true, last: true, hidden: true,
+    frameMap: [4, 5, 6, 7], frameMs: [110, 160, 200, 170], hits: [{ frame: 2, dmg: 46, box: [-20, -190, 190, 10], kb: 520, launch: 380, stop: 150, shake: 14, slam: true }], step: [40, 0, 40, 0], cancelAt: 3 },
 };
 // 必殺「フルスイング」：今持っている武器に相棒が力を込めて振り抜く
 const SPECIAL = { mp: 25, dmgMul: 1.8 };
@@ -343,3 +365,13 @@ const ITEMS = {
 
 // 次のレベルまでの経験値（本編の調整：Lv が上がるほど急に重くなる。Lv1:36 / Lv4:156 / Lv8:484）
 function expNeed(lv) { return 20 + lv * 10 + lv * lv * 6; }
+
+// 手ぶらの振りの各コマで、武器を握る手の位置と武器の向き [x, y, 角度]
+// x・y は主人公の足元からのドット（素材の大きさ。右向き・上が＋）、角度は画面上の向き（0＝右、-90＝真上、90＝真下）
+const HAND_POSE = {
+  dagger: [[50, 125, 25], [57, 190, -60], [67, 190, 0], [52, 133, 10], [60, 260, -80], [80, 205, 0], [45, 180, -20], [42, 140, 35]],
+  sword:  [[55, 195, -70], [53, 243, -105], [82, 110, 60], [60, 162, 140], [30, 160, -5], [50, 135, 30], [78, 235, -60], [42, 140, 70]],
+  axe:    [[55, 133, -50], [-52, 240, -130], [65, 212, -15], [45, 135, 70], [5, 145, 150], [-50, 250, -120], [53, 247, 95], [42, 140, 70]],
+};
+// アイコンの持ち手の位置（絵の幅・高さに対する割合）と、表示する長さ（ゲーム内のドット）。アイコンは柄が左下・先が右上に描かれている
+const ICON_GRIP = { dagger: [0.24, 0.8, 46], sword: [0.18, 0.84, 74], axe: [0.13, 0.9, 84] };

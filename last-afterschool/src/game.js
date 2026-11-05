@@ -117,7 +117,9 @@ function drawHud(ctx, W) {
   for (let i = 0; i < 3; i++) {
     const x = 304 + i * 42, y = 30, k = P.weapons[i];
     panel(ctx, x, y, 38, 38, k && i === P.wIdx ? '#3b2d63' : '#1e1734', k && i === P.wIdx ? '#a8ffb0' : '#5a4d86');
-    if (k) Icons.draw(ctx, k, x + 19, y + 22, 1.4);
+    const wi = P.wItems && P.wItems[i], ic = wi && wi.icon && IMG[wi.icon];
+    if (ic && ic.width) { const sc = 30 / Math.max(ic.width, ic.height); ctx.drawImage(ic, x + 19 - ic.width * sc / 2, y + 19 - ic.height * sc / 2, ic.width * sc, ic.height * sc); }
+    else if (k) Icons.draw(ctx, k, x + 19, y + 22, 1.4);
     if (k && P.fire) Icons.draw(ctx, 'fire', x + 31, y + 32, 0.6);
   }
   ctx.font = `11px ${FONT}`; ctx.fillStyle = '#b9aee0';

@@ -25,6 +25,10 @@ SHEETS = {  # anim name: (sheet file, expected frame count)
     'bat': ('hero_bat.jpg', 8),
     'chair': ('hero_chair.jpg', 8),
     'desk': ('hero_desk.jpg', 8),
+    # 手ぶらの振り（武器は手の位置に後から重ねる）：短剣4連・剣3連・斧2連
+    'dagger': ('hero_dagger.jpg', 8),
+    'sword': ('hero_sword.jpg', 8),
+    'axe': ('hero_axe.jpg', 8),
 }
 # 武器のシートは主人公が小さめに描かれているので、頭頂〜胸のリボンの長さ（待機・歩き・走り・蹴りで約106px）
 # がそろうように拡大する。机はリボンが隠れるので、机を持って直立したコマの身長で合わせた値。
@@ -34,7 +38,7 @@ DROP = {'desk': (5, 6)}
 SMART_SPLIT = ('hero_kick.jpg',)
 TARGET_FIG_H = 264   # 待機の身長（保存サイズ）。ゲーム内では0.5倍＝132。主人公の大きさを変える時はここと config.js の HERO_SIZE を合わせる
 WORLD_SCALE = 0.5
-WEAPON_ANIMS = ('bat', 'chair', 'desk')
+WEAPON_ANIMS = ('bat', 'chair', 'desk', 'dagger', 'sword', 'axe')
 FLIP = ()                # 反転すると敵に背を向けて振る絵になるので、どのシートも元の向きのまま使う
 HEAD_ALIGN = ('run',)    # 空中のコマがあるので、足元ではなく頭の高さでそろえる
 
