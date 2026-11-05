@@ -191,7 +191,7 @@ const Town = {
       ids.forEach(id => el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${CONSUMABLES[id].name} ×${Inv.count(s, id)}`), h('div', { class: 'sub' }, CONSUMABLES[id].desc)])])));
     };
     const statusTab = el => {
-      const st = Stats.calc(s), need = 20 + s.lv * 15;
+      const st = Stats.calc(s), need = expNeed(s.lv);
       const box = (k, v) => h('div', { class: 'ui-stat' }, [k, h('b', {}, v)]);
       el.append(h('div', { class: 'ui-grid' }, [box('レベル', s.lv), box('経験値', `${s.exp} / ${need}`), box('最大HP', st.maxHp), box('防御', st.def),
         box('会心率', `${st.crit}%`), box('移動速度', `${st.move >= 0 ? '+' : ''}${st.move}%`), box('攻撃力（装備）', `+${st.atkPct}%`), box('所持金', `${s.gold} G`)]));

@@ -276,11 +276,11 @@ class Player {
   box() { return [this.x - 20, this.y - 125 * HERO_SIZE, this.x + 20, this.y]; }
   gainExp(n) {
     this.exp += n;
-    let need = 20 + this.lv * 15;
+    let need = expNeed(this.lv);
     while (this.exp >= need) {
-      this.exp -= need; this.lv++; this.maxHp += 8; this.hp = Math.min(this.maxHp, this.hp + 25);
+      this.exp -= need; this.lv++; this.maxHp += 8; this.hp = Math.min(this.maxHp, this.hp + Math.round(this.maxHp * 0.1));
       Audio2.sfx('lvup'); this.w.floatText(this.x, this.y - 160, 'LEVEL UP!', '#ffe27a', 22); this.setFace('happy', 1.5);
-      need = 20 + this.lv * 15;
+      need = expNeed(this.lv);
     }
   }
   draw(ctx, cam) {

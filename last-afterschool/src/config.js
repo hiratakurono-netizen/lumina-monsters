@@ -337,3 +337,6 @@ const ITEMS = {
   desk:  { label: '机', weapon: 'desk' },
   stove: { label: 'ガスコンロ', fire: true },
 };
+
+// 次のレベルまでの経験値（本編の調整：Lv が上がるほど急に重くなる。Lv1:36 / Lv4:156 / Lv8:484）
+function expNeed(lv) { return 20 + lv * 10 + lv * lv * 6; }

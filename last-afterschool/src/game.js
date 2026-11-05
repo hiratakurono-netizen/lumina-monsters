@@ -125,7 +125,7 @@ function drawHud(ctx, W) {
   // スマホでは下端がボタンに隠れるので Lv/TIME を上に置く
   const lvY = IS_TOUCH ? 128 : VIEW_H - 16, timeY = IS_TOUCH ? 56 : VIEW_H - 16;
   const lv = `Lv ${P.lv}`; ctx.strokeText(lv, 20, lvY); ctx.fillText(lv, 20, lvY);
-  const need = 20 + P.lv * 15; bar(ctx, 80, lvY - 10, 80, 5, P.exp / need, '#ffe27a');
+  const need = expNeed(P.lv); bar(ctx, 80, lvY - 10, 80, 5, P.exp / need, '#ffe27a');
   const t = W.time, tt = `TIME ${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
   ctx.textAlign = 'right'; ctx.strokeText(tt, VIEW_W - 20, timeY); ctx.fillText(tt, VIEW_W - 20, timeY);
   ctx.font = `14px ${FONT}`; ctx.fillStyle = '#d8ccff';
