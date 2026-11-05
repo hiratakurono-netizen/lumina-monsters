@@ -314,13 +314,10 @@ const Backgrounds = (() => {
   const cache = {};
   function get(name) {
     if (!cache[name]) cache[name] = ({
-      street: () => stackedArt('town2', { ground: 'town2_road', sky: '#7fb6e8', ambient: 'petal' }) || street(),
-      schoolyard: () => stackedArt('yard', { ground: 'yard_ground', sky: '#3b6aa0', ambient: 'ash' }) || schoolyard(),
-      corridor: () => stackedArt('homeec', { ground: 'homeec_floor', sky: '#2a3f60', ambient: 'ash', dim: 0.08 }) || corridor(),
-      homeec: () => stackedArt('homeec', { ground: 'homeec_floor', sky: '#2a3f60', ambient: 'steam' }) || homeec(),
-      rooftop: () => stackedArt('roof', { ground: 'roof_floor', sky: '#8a1424', skyImg: 'roof_band0', bands: [1, 2], speeds: [0.35, 0.6], zoom: 0.72, ambient: 'ember' }) || rooftop(false),
-      town: () => stackedArt('town2', { ground: 'town2_walk', sky: '#7fb6e8', ambient: 'petal' }) || town(),
-      grassland,
+      // 町・プロローグは元のデザイン。新しい町・学校の素材（stackedArt）は使っていない（使う時は例：
+      //   street: () => stackedArt('town2', { ground: 'town2_road', sky: '#7fb6e8', ambient: 'petal' }) || street() ）
+      street, schoolyard, corridor, homeec, town, grassland,
+      rooftop: () => rooftop(false),
       desert: () => biomeArt('desert', 2), snow: () => biomeArt('snow', 3), volcano: () => biomeArt('volcano', 3),
       castle_out: () => biomeArt('castle_out', 3), castle_in: () => biomeArt('castle_in', 2, 2.45, 0.97, false),   // 城内：広間の帯を大きくして画面を埋める
       rooftop_calm: () => rooftop(true),

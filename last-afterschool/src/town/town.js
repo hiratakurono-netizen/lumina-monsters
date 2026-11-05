@@ -11,9 +11,8 @@ const TOWN = {
   intro: [], events: [], endX: 99999, outro: [],
   // 街の飾り（街灯・ベンチ・自販機）。x は町の座標、s は拡大率
   decor: [
-    { x: 120, img: 'town2_lamp', s: 1.3 }, { x: 600, img: 'town2_hedge', s: 1.3 }, { x: 700, img: 'town2_postbox', s: 1.3 },
-    { x: 1260, img: 'town2_bench', s: 1.3 }, { x: 1380, img: 'town2_tree', s: 1.4 }, { x: 1840, img: 'town2_lamp2', s: 1.3 },
-    { x: 2240, img: 'town2_bench', s: 1.3 }, { x: 2330, img: 'town2_tree2', s: 1.4 }, { x: 2950, img: 'town2_lamp', s: 1.3 }, { x: 3000, img: 'town2_hedge2', s: 1.3 },
+    { x: 120, img: 'lamp', s: 1.6 }, { x: 640, img: 'vending', s: 1.5 }, { x: 700, img: 'lamp', s: 1.6 },
+    { x: 1300, img: 'bench', s: 1.4 }, { x: 1830, img: 'lamp', s: 1.6 }, { x: 2250, img: 'bench', s: 1.4 }, { x: 2380, img: 'vending', s: 1.5 }, { x: 2950, img: 'lamp', s: 1.6 },
   ],
   facilities: [
     { id: 'home',  x: 340,  name: '自宅' },
@@ -66,16 +65,14 @@ const Town = {
       const x = f.x - cam;
       if (x < -320 || x > VIEW_W + 320) continue;
       ctx.save(); ctx.translate(x, G); ctx.scale(f.npc ? 1 : FZ, f.npc ? 1 : FZ); ctx.translate(-x, -G);
-      if (f.id === 'home' && IMG[ENV.town2_house] && IMG[ENV.town2_house].width) {
-        const hh = art('town2_house', x, 1.65 / FZ); sign(x, G - hh - 14, '自宅');
-      } else if (f.id === 'home') {
+      if (f.id === 'home') {
         R('#e8d8e2', x - 110, G - 190, 220, 190); ctx.fillStyle = '#7c5f8d';
         ctx.beginPath(); ctx.moveTo(x - 130, G - 190); ctx.lineTo(x, G - 260); ctx.lineTo(x + 130, G - 190); ctx.fill();
         R('#ffd9a0', x - 85, G - 160, 44, 36); R('#ffd9a0', x + 41, G - 160, 44, 36);
         R('#6d5248', x - 22, G - 92, 44, 92); R('#d8b080', x + 12, G - 50, 5, 5);
         sign(x, G - 205, '自宅');
       } else if (f.id === 'shop' && IMG[ENV.store] && IMG[ENV.store].width) {
-        const hh = art(IMG[ENV.town2_store] && IMG[ENV.town2_store].width ? 'town2_store' : 'store', x, 1.6 / FZ); sign(x, G - hh - 14, 'コンビニ');
+        const hh = art('store', x, 1.9 / FZ); sign(x, G - hh - 14, 'コンビニ');
       } else if (f.id === 'shop') {
         R('#f2eef4', x - 130, G - 170, 260, 170);
         for (let i = 0; i < 13; i++) R(i % 2 ? '#fff' : '#6ab48a', x - 130 + i * 20, G - 170, 20, 22);
@@ -83,8 +80,6 @@ const Town = {
         R('#6e6080', x + 60, G - 120, 50, 120); R('#bfe0ff', x + 66, G - 112, 38, 60);
         ctx.fillStyle = 'rgba(255,240,200,.35)'; ctx.fillRect(x - 108, G - 128, 146, 96);
         sign(x, G - 185, 'コンビニ');
-      } else if (f.id === 'smith' && IMG[ENV.town2_smith] && IMG[ENV.town2_smith].width) {
-        const hh = art('town2_smith', x, 1.6 / FZ); sign(x, G - hh - 14, '鍛冶屋（準備中）', '#c9bfd6');
       } else if (f.id === 'smith') {
         R('#8a7468', x - 100, G - 140, 200, 140); R('#5a4a44', x - 110, G - 152, 220, 16);
         R('#3a302c', x - 30, G - 90, 60, 90); R('#2a2224', x - 20, G - 30, 40, 14);
@@ -93,7 +88,7 @@ const Town = {
         this.drawMio(ctx, x, G, t);
         ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffd6e6'; ctx.textAlign = 'center'; ctx.fillText(NAMES.friend, x, G - 170); ctx.textAlign = 'left';
       } else if (f.id === 'gate' && IMG[ENV.school] && IMG[ENV.school].width) {
-        const hh = art(IMG[ENV.town2_school] && IMG[ENV.town2_school].width ? 'town2_school' : 'school', x, 1.7 / FZ);
+        const hh = art('school', x, 2.3 / FZ);
         const a = 0.35 + Math.sin(t * 2.4) * 0.12;
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
         const g = ctx.createRadialGradient(x, G - hh - 10, 6, x, G - hh - 10, 120); g.addColorStop(0, `rgba(200,140,255,${a})`); g.addColorStop(1, 'rgba(120,60,200,0)');
