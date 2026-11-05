@@ -5,7 +5,11 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const overlap = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 const fmt = s => s.replace(/\{(\w+)\}/g, (_, k) => NAMES[k] || k);
 
-function spriteSet(anim) { return anim.startsWith('swing_') ? SPRITE_DATA.swing[anim.slice(6)] : SPRITE_DATA.heroine[anim]; }
+function spriteSet(anim) {
+  if (anim.startsWith('swing_')) return SPRITE_DATA.swing[anim.slice(6)];
+  if (anim.startsWith('carry_')) { const [, k, m] = anim.split('_'); return SPRITE_DATA.carry[k][m]; }
+  return SPRITE_DATA.heroine[anim];
+}
 function heroFrame(anim, i) { const a = spriteSet(anim); return [IMG[a.img], a.frames[Math.min(i, a.frames.length - 1)]]; }
 function drawHero(ctx, anim, i, x, y, face, scale = HERO_SCALE * (ANIM_SCALE[anim] || 1)) {
   const [img, f] = heroFrame(anim, i);
@@ -133,7 +137,7 @@ class Player {
           this.frame = a.frame; this.enterFrame();
         }
       }
-      if (this.atk) { this.frame = def.swing || !def.weapon ? this.atk.frame : 0; this.updateTrail(this.atk, dt); }
+      if (this.atk) { const d = this.atk.def; this.frame = d.frameMap ? d.frameMap[this.atk.frame] : (d.swing || !d.weapon ? this.atk.frame : 0); this.updateTrail(this.atk, dt); }
       else this.frame = 0;
       return this.physics(dt);
     }
@@ -172,13 +176,18 @@ class Player {
     const speed = (this.guarding ? 110 : run ? 340 : 190) * this.weightSpeed();
     this.vx = move * speed;
     if (move) this.face = move;
-    if (this.guarding) { this.anim = 'idle'; this.frame = 0; this.ft = 0; }
-    else if (!this.onGround) { this.anim = 'run'; this.frame = this.vy < 0 ? 1 : 4; }
+    // 武器を持っている時は「武器を持った歩き・走り」のコマを使う（待機・ガードは歩きの1コマ目）
+    const carry = this.weapon && SPRITE_DATA.carry && SPRITE_DATA.carry[this.weapon];
+    const A = m => carry ? `carry_${this.weapon}_${m}` : m;
+    if (this.guarding) { this.anim = carry ? A('walk') : 'idle'; this.frame = 0; this.ft = 0; }
+    else if (!this.onGround) { this.anim = A('run'); this.frame = carry ? (this.vy < 0 ? 1 : 3) : (this.vy < 0 ? 1 : 4); }
     else if (move) {
-      const nextAnim = run ? 'run' : 'walk';
+      const nextAnim = A(run ? 'run' : 'walk');
       if (this.anim !== nextAnim) { this.anim = nextAnim; this.frame = 0; this.ft = 0; }
-      this.ft += dt; const fd = run ? 0.075 : 0.15;
-      if (this.ft > fd) { this.ft = 0; this.frame = (this.frame + 1) % SPRITE_DATA.heroine[this.anim].frames.length; if (run && this.frame % 3 === 0) W.dust(this.x - this.face * 20, this.y, 2); }
+      this.ft += dt; const fd = run ? 0.075 : 0.13;
+      if (this.ft > fd) { this.ft = 0; this.frame = (this.frame + 1) % spriteSet(this.anim).frames.length; if (run && this.frame % 3 === 0) W.dust(this.x - this.face * 20, this.y, 2); }
+    } else if (carry) {
+      this.anim = A('walk'); this.frame = 0; this.ft = 0;
     } else {
       if (this.anim !== 'idle') { this.anim = 'idle'; this.frame = 0; this.ft = 0; }
       this.ft += dt; if (this.ft > 0.22) { this.ft = 0; this.frame = (this.frame + 1) % 4; }
@@ -247,7 +256,7 @@ class Player {
     ctx.globalAlpha = 1;
     if (this.guarding) this.drawGuard(ctx, cam);
     if (this.atk) this.drawWeapon(ctx, cam);
-    else this.drawHeld(ctx, cam);
+    else if (!(SPRITE_DATA.carry && SPRITE_DATA.carry[this.weapon])) this.drawHeld(ctx, cam);
   }
   drawGuard(ctx, cam) {
     const x = this.x - cam + this.face * 30, y = this.y - 70;

@@ -52,31 +52,32 @@ const WEAPONS = {
   },
   chair: {
     name: '椅子', from: '椅子', icon: 'chair', anim: 'swing_chair', swing: 'chair', size: 'M', weapon: 'chair',
-    frameMs: [90, 90, 80, 80, 120, 120, 120, 120],
-    arc: [-110, -70, 20, 60, 70, 70, 70, 70],
+    frameMs: [90, 90, 80, 170],
+    arc: [-110, -70, 20, 60],
     hits: [
       { frame: 1, dmg: 14, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
       { frame: 2, dmg: 20, box: [-20, -140, 140, -5], kb: 300, launch: 180, stop: 80, shake: 6 },
     ],
-    step: [0, 40, 60, 0, 0, 0, 0, 0], cancelAt: 3,
+    step: [0, 40, 60, 0], cancelAt: 3,
   },
   desk: {
     name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk',
-    frameMs: [120, 110, 100, 160, 160, 140, 140, 150, 150],
-    arc: [-120, -90, -40, 60, 70, 70, 70, 70, 70],
+    frameMs: [120, 110, 100, 240],
+    arc: [-120, -90, -40, 60],
     hits: [{ frame: 3, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
-    step: [0, 30, 50, 0, 0, 0, 0, 0, 0], cancelAt: 3, next: 'desk2',
+    step: [0, 30, 50, 0], cancelAt: 3, next: 'desk2',
   },
+  // 机の2段目：同じ振りコマの後半を速く再生して、もう一度叩きつける
   desk2: {
-    name: '回転斬り', anim: 'idle', size: 'L', weapon: 'desk', hidden: true,
-    frameMs: [70, 80, 80, 80, 170],
-    arc: [0, 90, 180, 270, 360],
+    name: '追い打ち', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk', hidden: true,
+    frameMap: [1, 2, 3],
+    frameMs: [80, 70, 230],
+    arc: [-90, -40, 60],
     hits: [
-      { frame: 0, dmg: 18, box: [-40, -150, 175, 5], kb: 250, stop: 60, shake: 5 },
-      { frame: 1, dmg: 18, box: [-140, -150, 150, 5], kb: 250, stop: 60, shake: 5 },
-      { frame: 3, dmg: 30, box: [-60, -140, 190, 5], kb: 480, launch: 300, stop: 110, shake: 9 },
+      { frame: 1, dmg: 22, box: [-30, -170, 180, 5], kb: 300, stop: 70, shake: 6 },
+      { frame: 2, dmg: 34, box: [-20, -170, 200, 10], kb: 480, launch: 300, stop: 110, shake: 10 },
     ],
-    step: [40, 30, 30, 40, 0], cancelAt: 4,
+    step: [30, 40, 0], cancelAt: 2,
   },
 };
 // 必殺「フルスイング」：どの武器でも相棒が巨大化させて叩きつける

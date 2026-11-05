@@ -201,14 +201,29 @@ def key_monster(a, box, tol=30):
     return img.crop(bb) if bb else img
 
 
+def close_feet(alpha_mask, rows=34, it=2):
+    """足元だけ「閉じる」処理（膨張→収縮）で、背景色に近い靴の中身の抜けを埋める。"""
+    m = alpha_mask.copy(); h = m.shape[0]; y0 = max(0, h - rows)
+    sub = m[y0:]
+    def dil(a):
+        o = a.copy(); o[1:] |= a[:-1]; o[:-1] |= a[1:]; o[:, 1:] |= a[:, :-1]; o[:, :-1] |= a[:, 1:]; return o
+    def ero(a):
+        o = a.copy(); o[1:] &= a[:-1]; o[:-1] &= a[1:]; o[:, 1:] &= a[:, :-1]; o[:, :-1] &= a[:, 1:]; return o
+    c = sub
+    for _ in range(it): c = dil(c)
+    for _ in range(it): c = ero(c)
+    m[y0:] = c | sub
+    return m
+
 # ---------------------------------------------------------------------------
 #  武器の振りモーション（sheet_weapon_motion.jpg：武器を持った全身コマ）
 # ---------------------------------------------------------------------------
 SWING_SHEET = 'sheet_weapon_motion.jpg'
 SWING_CELLS = {
     'bat':   (272, 396, [(17, 149), (160, 292), (303, 436), (438, 562), (572, 696), (706, 829), (839, 962), (972, 1097)]),
-    'chair': (438, 562, [(17, 149), (160, 292), (303, 436), (438, 562), (572, 696), (706, 829), (839, 962), (972, 1097)]),
-    'desk':  (604, 728, [(17, 149), (160, 292), (303, 436), (438, 562), (572, 696), (706, 829), (839, 962), (972, 1097), (1103, 1228)]),
+    # 主人公が写っているコマだけ使う（椅子の破片だけ・机だけのコマは除外）
+    'chair': (438, 562, [(17, 149), (160, 292), (303, 436), (438, 562)]),
+    'desk':  (604, 728, [(17, 149), (160, 292), (303, 436), (438, 562)]),
 }
 
 def key_swing_cell(a, rect, inset=4, tol=60):
@@ -218,6 +233,9 @@ def key_swing_cell(a, rect, inset=4, tol=60):
     h, w, _ = cell.shape
     bg = np.median(np.concatenate([cell[0], cell[-1], cell[:, 0], cell[:, -1]]), axis=0)
     near = np.abs(cell - bg).sum(axis=2) < tol
+    shadow = np.abs(cell - bg * 0.74).sum(axis=2) < 45  # 足元の焼き込み影
+    shadow[:h - 18] = False
+    near |= shadow
     seen = np.zeros((h, w), bool); q = deque()
     for x in range(w):
         for y in (0, h - 1):
@@ -231,7 +249,7 @@ def key_swing_cell(a, rect, inset=4, tol=60):
             ny, nx = y + dy, x + dx
             if 0 <= ny < h and 0 <= nx < w and not seen[ny, nx] and near[ny, nx]:
                 seen[ny, nx] = True; q.append((ny, nx))
-    alpha = np.where(seen, 0, 255).astype(np.uint8)
+    alpha = np.where(close_feet(~seen), 255, 0).astype(np.uint8)
     img = Image.fromarray(np.dstack([cell.astype(np.uint8), alpha]), 'RGBA')
     bb = img.getbbox()
     if not bb: return img, (w // 2, h)
@@ -242,27 +260,77 @@ def key_swing_cell(a, rect, inset=4, tol=60):
     ax = int(np.median(low)) if len(low) else img.width // 2
     return img, (ax, img.height)
 
+def pack_cells(name, frames):
+    """枠ごとのコマを横に並べて保存。足元＝靴の位置、左右＝枠の中央で揃える。"""
+    # エフェクトが下端に届くコマがあるので、コマごとの最下行の中央値を足元にする
+    foot = int(np.median([np.nonzero((np.asarray(f)[:, :, 3] > 0).sum(axis=1) >= 4)[0].max() + 1 for f in frames]))
+    W = sum(f.width for f in frames) + 2 * len(frames); H = max(f.height for f in frames)
+    strip = Image.new('RGBA', (W, H), (0, 0, 0, 0)); meta, x = [], 0
+    for f in frames:
+        strip.paste(f, (x, 0))
+        meta.append({'x': x, 'y': 0, 'w': f.width, 'h': f.height, 'ax': f.width // 2, 'ay': foot})
+        x += f.width + 2
+    save_small(strip, os.path.join(OUT, f'{name}.png'))
+    return {'img': f'assets/sprites/{name}.png', 'frames': meta}
+
 def cut_swing(data):
     src = np.asarray(Image.open(os.path.join(SRC, SWING_SHEET)).convert('RGB')).astype(int)
-    out = {}
-    for key, (y0, y1, cols) in SWING_CELLS.items():
-        frames = [key_swing_cell(src, (x0, y0, x1, y1)) for x0, x1 in cols]
-        strip_w = sum(f.width for f, _ in frames) + 2 * len(frames)
-        strip_h = max(f.height for f, _ in frames)
-        strip = Image.new('RGBA', (strip_w, strip_h), (0, 0, 0, 0))
-        meta, x = [], 0
-        for f, (ax, ay) in frames:
-            strip.paste(f, (x, strip_h - f.height))
-            meta.append({'x': x, 'y': strip_h - f.height, 'w': f.width, 'h': f.height, 'ax': ax, 'ay': ay})
-            x += f.width + 2
-        save_small(strip, os.path.join(OUT, f'swing_{key}.png'))
-        out[key] = {'img': f'assets/sprites/swing_{key}.png', 'frames': meta}
-    data['swing'] = out
+    data['swing'] = {key: pack_cells(f'swing_{key}', [key_carry_cell(src, (x0, y0, x1, y1), label=(0, 0)) for x0, x1 in cols])
+                     for key, (y0, y1, cols) in SWING_CELLS.items()}
+
+# ---------------------------------------------------------------------------
+#  武器を持った歩き・走り（sheet_carry_*.jpg）。待機は歩きの1コマ目を使う
+# ---------------------------------------------------------------------------
+_C7 = [(17, 149), (158, 290), (298, 430), (438, 570), (577, 709), (716, 848), (855, 987)]
+CARRY_CELLS = {
+    ('bat', 'walk'):   ('sheet_carry_bat_chair.jpg', 105, 228, [(298, 430), (438, 570), (577, 709), (716, 848), (855, 987), (994, 1125)]),
+    ('bat', 'run'):    ('sheet_carry_bat_chair.jpg', 272, 395, _C7[:6]),
+    ('chair', 'walk'): ('sheet_carry_bat_chair.jpg', 438, 561, _C7),
+    ('chair', 'run'):  ('sheet_carry_bat_chair.jpg', 604, 727, _C7[:6]),
+    ('desk', 'walk'):  ('sheet_carry_desk.jpg', 32, 155, _C7),
+    ('desk', 'run'):   ('sheet_carry_desk.jpg', 198, 321, _C7[:6]),
+}
+
+def key_carry_cell(a, rect, inset=3, tol=44, label=(32, 22)):
+    """Panel colour + baked drop shadow -> transparent. Keeps the full cell so the body stays put."""
+    l, t, r, b = rect
+    cell = a[t + inset:b - inset, l + inset:r - inset].copy()
+    h, w, _ = cell.shape
+    bg = np.median(np.concatenate([cell[0], cell[-1], cell[:, 0], cell[:, -1]]), axis=0)
+    cell[:label[1], :label[0]] = bg  # 「W1」などのラベルを消す
+    near = np.abs(cell - bg).sum(axis=2) < tol
+    # 足元の焼き込み影（薄い外側）。濃い色は靴の輪郭なので残す
+    shadow = np.abs(cell - bg * 0.74).sum(axis=2) < 45
+    shadow[:h - 18] = False
+    near |= shadow
+    seen = np.zeros((h, w), bool); q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if near[y, x]: seen[y, x] = True; q.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if near[y, x] and not seen[y, x]: seen[y, x] = True; q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and not seen[ny, nx] and near[ny, nx]:
+                seen[ny, nx] = True; q.append((ny, nx))
+    alpha = np.where(close_feet(~seen), 255, 0).astype(np.uint8)
+    return Image.fromarray(np.dstack([cell.astype(np.uint8), alpha]), 'RGBA')
+
+def cut_carry(data):
+    sheets, out = {}, {}
+    for (key, mode), (sheet, y0, y1, cols) in CARRY_CELLS.items():
+        a = sheets.setdefault(sheet, np.asarray(Image.open(os.path.join(SRC, sheet)).convert('RGB')).astype(int))
+        out.setdefault(key, {})[mode] = pack_cells(f'carry_{key}_{mode}', [key_carry_cell(a, (x0, y0, x1, y1)) for x0, x1 in cols])
+    data['carry'] = out
 
 def main():
     os.makedirs(OUT, exist_ok=True)
     data = {'heroine': {}, 'monsters': {}, 'portraits': {}}
     cut_swing(data)
+    cut_carry(data)
     sheets = {}
     for name, sheet, cells, label in HEROINE:
         a = sheets.setdefault(sheet, load(sheet))
