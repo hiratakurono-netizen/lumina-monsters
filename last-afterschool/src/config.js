@@ -5,6 +5,8 @@
 
 const VIEW_W = 960, VIEW_H = 540;
 const GROUND_Y = 468;
+// 内部の描画解像度の倍率（ゲーム座標は 960x540 のまま、キャンバスは 1920x1080）
+const RENDER_SCALE = 2;
 // 主人公の表示倍率。キックの行は元シートで大きめに描かれているので個別に補正
 const HERO_SCALE = 1.25;
 // 武器を持っている時の移動速度（重いほど遅い）
@@ -35,49 +37,49 @@ const BGM = {
 const WEAPONS = {
   kick: {
     name: 'キック', icon: 'kick', anim: 'kick', size: 'K',
-    frameMs: [70, 60, 110, 80, 70],
-    hits: [{ frame: 2, dmg: 9, box: [5, -110, 105, -30], kb: 260, launch: 0, stop: 60 }],
-    step: [0, 30, 60, 0, 0], cancelAt: 3,
+    frameMs: [50, 50, 60, 60, 120, 80, 70, 70],
+    hits: [{ frame: 4, dmg: 9, box: [5, -110, 105, -30], kb: 260, launch: 0, stop: 60 }],
+    step: [0, 0, 20, 30, 60, 0, 0, 0], cancelAt: 5,
   },
-  // 振りは sheet_weapon_motion のコマ（SPRITE_DATA.swing）。arc は先端位置の計算（属性の軌跡）用の近似。
+  // 振りは主人公の振りモーション（SPRITE_DATA.swing）。arc は属性の軌跡を出す先端位置の近似（度・前方が+90）
   bat: {
     name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swing_bat', swing: 'bat', size: 'S', weapon: 'bat', element: 'sand',
-    frameMs: [60, 60, 50, 70, 70, 80, 80, 100],
-    arc: [-120, -100, -60, 40, 70, 60, 40, 30],
+    frameMs: [60, 60, 50, 60, 70, 70, 80, 90],
+    arc: [-30, -50, 90, 110, 110, 100, 90, -20],
     hits: [
-      { frame: 2, dmg: 10, box: [-10, -140, 110, -5], kb: 150, stop: 50 },
-      { frame: 3, dmg: 18, box: [-10, -140, 130, -5], kb: 260, launch: 200, stop: 70, shake: 5 },
+      { frame: 2, dmg: 10, box: [-10, -140, 120, -5], kb: 150, stop: 50 },
+      { frame: 3, dmg: 18, box: [-10, -140, 135, -5], kb: 260, launch: 200, stop: 70, shake: 5 },
     ],
-    step: [0, 0, 30, 50, 40, 0, 0, 0], cancelAt: 4,
+    step: [0, 0, 30, 50, 30, 0, 0, 0], cancelAt: 5,
   },
   chair: {
     name: '椅子', from: '椅子', icon: 'chair', anim: 'swing_chair', swing: 'chair', size: 'M', weapon: 'chair',
-    frameMs: [90, 90, 80, 170],
-    arc: [-110, -70, 20, 60],
+    frameMs: [80, 90, 70, 70, 80, 90, 90, 100],
+    arc: [0, -60, 40, 90, 90, 90, 60, 0],
     hits: [
-      { frame: 1, dmg: 14, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
-      { frame: 2, dmg: 20, box: [-20, -140, 140, -5], kb: 300, launch: 180, stop: 80, shake: 6 },
+      { frame: 3, dmg: 14, box: [-15, -135, 125, -5], kb: 220, stop: 60, shake: 4 },
+      { frame: 5, dmg: 20, box: [-20, -140, 145, -5], kb: 300, launch: 180, stop: 80, shake: 6 },
     ],
-    step: [0, 40, 60, 0], cancelAt: 3,
+    step: [0, 0, 40, 40, 50, 30, 0, 0], cancelAt: 6,
   },
   desk: {
     name: '机のグレートソード', from: '机', icon: 'desk', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk',
-    frameMs: [120, 110, 100, 240],
-    arc: [-120, -90, -40, 60],
-    hits: [{ frame: 3, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
-    step: [0, 30, 50, 0], cancelAt: 3, next: 'desk2',
+    frameMs: [110, 100, 90, 90, 90, 180, 140, 130],
+    arc: [0, -60, -40, -20, 60, 90, 90, 0],
+    hits: [{ frame: 5, dmg: 48, box: [-20, -175, 200, 10], kb: 520, launch: 380, stop: 150, shake: 14, burst: true }],
+    step: [0, 0, 20, 30, 60, 0, 0, 0], cancelAt: 6, next: 'desk2',
   },
-  // 机の2段目：同じ振りコマの後半を速く再生して、もう一度叩きつける
+  // 机の2段目：振りモーションの後半を速く再生して、もう一度叩きつける
   desk2: {
     name: '追い打ち', anim: 'swing_desk', swing: 'desk', size: 'L', weapon: 'desk', hidden: true,
-    frameMap: [1, 2, 3],
-    frameMs: [80, 70, 230],
-    arc: [-90, -40, 60],
+    frameMap: [3, 4, 5, 6],
+    frameMs: [70, 70, 200, 120],
+    arc: [-20, 60, 90, 90],
     hits: [
       { frame: 1, dmg: 22, box: [-30, -170, 180, 5], kb: 300, stop: 70, shake: 6 },
       { frame: 2, dmg: 34, box: [-20, -170, 200, 10], kb: 480, launch: 300, stop: 110, shake: 10 },
     ],
-    step: [30, 40, 0], cancelAt: 2,
+    step: [30, 40, 0, 0], cancelAt: 3,
   },
 };
 // 必殺「フルスイング」：どの武器でも相棒が巨大化させて叩きつける

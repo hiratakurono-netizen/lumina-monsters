@@ -203,6 +203,8 @@ const Game = {
     Input.endFrame();
   },
   draw() {
+    // 2倍の解像度で描く（座標は 960x540 のまま）。主人公の高解像度素材が等倍で出る
+    ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0); ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = '#0b0714'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     const S = this['d_' + this.scene]; if (S) S.call(this);
     const f = this.fadeOut ? Math.min(1, this.fadeOut.t / 0.6) : this.fade;
@@ -275,10 +277,12 @@ const Game = {
     }
     // キーアート
     const ka = IMG[SPRITE_DATA.keyart];
-    ctx.save(); ctx.globalAlpha = 0.95; panel(ctx, 520, 70, 400, 314, '#14102a', '#d8c8ff');
-    ctx.drawImage(ka, 0, 0, 320, 250, 526, 76, 388, 302);
-    const g = ctx.createLinearGradient(0, 300, 0, 384); g.addColorStop(0, 'rgba(20,16,42,0)'); g.addColorStop(1, 'rgba(20,16,42,.9)');
-    ctx.fillStyle = g; ctx.fillRect(526, 290, 388, 88); ctx.restore();
+    // 新しい全身イラスト（背景透過）を右側に大きく
+    if (ka && ka.width) {
+      const h = 500, w = ka.width * h / ka.height;
+      ctx.save(); ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(ka, 940 - w, 30 + Math.sin(this.t * 1.2) * 4, w, h); ctx.restore();
+    }
     // タイトル
     ctx.textAlign = 'left';
     ctx.font = `15px ${FONT}`; ctx.fillStyle = '#d8c8ff'; ctx.fillText('THE LAST AFTERSCHOOL', 60, 120);
@@ -453,7 +457,6 @@ function loadAll() {
   used.forEach(k => paths.add(SPRITE_DATA.monsters[k].img));
   Object.values(SPRITE_DATA.portraits).forEach(p => paths.add(p));
   Object.values(SPRITE_DATA.swing).forEach(a => paths.add(a.img));
-  Object.values(SPRITE_DATA.carry).forEach(k => Object.values(k).forEach(a => paths.add(a.img)));
   paths.add(SPRITE_DATA.keyart);
   Object.values(WEAPON_ART).forEach(w => paths.add(w.file));
   return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));

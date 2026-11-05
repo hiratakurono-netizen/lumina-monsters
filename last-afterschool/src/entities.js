@@ -7,11 +7,12 @@ const fmt = s => s.replace(/\{(\w+)\}/g, (_, k) => NAMES[k] || k);
 
 function spriteSet(anim) {
   if (anim.startsWith('swing_')) return SPRITE_DATA.swing[anim.slice(6)];
-  if (anim.startsWith('carry_')) { const [, k, m] = anim.split('_'); return SPRITE_DATA.carry[k][m]; }
   return SPRITE_DATA.heroine[anim];
 }
 function heroFrame(anim, i) { const a = spriteSet(anim); return [IMG[a.img], a.frames[Math.min(i, a.frames.length - 1)]]; }
-function drawHero(ctx, anim, i, x, y, face, scale = HERO_SCALE * (ANIM_SCALE[anim] || 1)) {
+function drawHero(ctx, anim, i, x, y, face, scale) {
+  const set = spriteSet(anim);
+  if (!scale) scale = set.scale || HERO_SCALE * (ANIM_SCALE[anim] || 1);
   const [img, f] = heroFrame(anim, i);
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); if (face < 0) ctx.scale(-1, 1);
   ctx.drawImage(img, f.x, f.y, f.w, f.h, -f.ax * scale, -f.ay * scale, f.w * scale, f.h * scale);
@@ -51,7 +52,7 @@ class Player {
     this.weapons = lo.weapons.slice(); this.wIdx = 0; this.fire = lo.fire; this.canFight = lo.canFight;
     this.inv = 0; this.atk = null; this.hurtT = 0; this.locked = false; this.faceTimer = 0; this.faceOverride = null;
     this.minHp = 0;
-    this.guarding = false; this.dodgeT = 0; this.dodgeCD = 0; this.ghosts = [];
+    this.guarding = false; this.dodgeT = 0; this.dodgeCD = 0; this.ghosts = []; this.jumps = 0; this.airDodged = false;
   }
   get weapon() { return this.weapons.length ? this.weapons[this.wIdx] : null; }
   weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return w ? (WEIGHT_SPEED[w.size] || 1) : 1; }
@@ -142,6 +143,7 @@ class Player {
       return this.physics(dt);
     }
     if (this.state === 'hurt') {
+      this.anim = 'hurt'; this.frame = Math.min(3, Math.floor((0.8 - this.hurtT) / 0.08));
       if (this.hurtT <= 0.5) this.state = 'idle';
       return this.physics(dt);
     }
@@ -150,7 +152,13 @@ class Player {
     if (control) {
       if (I.held.left) move -= 1;
       if (I.held.right) move += 1;
-      if (I.hit('jump') && this.onGround) { this.vy = -780; this.onGround = false; Audio2.sfx('jump'); }
+      if (I.hit('jump')) {
+        if (this.onGround) { this.vy = -780; this.onGround = false; this.jumps = 1; Audio2.sfx('jump'); }
+        else if (this.jumps < 2) { // 空中2段ジャンプ
+          this.vy = -700; this.jumps = 2; Audio2.sfx('jump');
+          for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; W.fx.push(new Particle({ x: this.x + Math.cos(a) * 18, y: this.y - 10, vx: Math.cos(a) * 160, vy: Math.sin(a) * 50, drag: 0.02, life: 0.35, size: 4, color: '#e6dcff', add: true })); }
+        }
+      }
       if (I.hit('swap') && this.weapons.length > 1) {
         this.wIdx = (this.wIdx + 1) % this.weapons.length; Audio2.sfx('select');
         W.floatText(this.x, this.y - 140, WEAPONS[this.weapon].name, '#e9dcff', 14);
@@ -165,41 +173,45 @@ class Player {
       }
     }
     this.guarding = guardHeld && this.onGround;
-    // ガード中の横入力＝緊急回避（スマブラ風）
-    if (this.guarding && move !== 0 && this.dodgeCD <= 0) {
+    // ガード＋横入力＝緊急回避（スマブラ風）。空中でも1回だけ使える
+    if (guardHeld && move !== 0 && this.dodgeCD <= 0 && (this.onGround || !this.airDodged)) {
       this.state = 'dodge'; this.dodgeT = 0.28; this.dodgeCD = 0.7; this.inv = 0.32;
       this.face = move; this.vx = move * 560; this.guarding = false;
-      Audio2.sfx('jump'); W.dust(this.x, GROUND_Y, 5);
+      if (!this.onGround) { this.airDodged = true; this.vy = 0; }
+      else W.dust(this.x, GROUND_Y, 5);
+      Audio2.sfx('jump');
       return this.physics(dt);
     }
     const run = control && I.dash && move !== 0 && !this.guarding;
     const speed = (this.guarding ? 110 : run ? 340 : 190) * this.weightSpeed();
     this.vx = move * speed;
     if (move) this.face = move;
-    // 武器を持っている時は「武器を持った歩き・走り」のコマを使う（待機・ガードは歩きの1コマ目）
-    const carry = this.weapon && SPRITE_DATA.carry && SPRITE_DATA.carry[this.weapon];
-    const A = m => carry ? `carry_${this.weapon}_${m}` : m;
-    if (this.guarding) { this.anim = carry ? A('walk') : 'idle'; this.frame = 0; this.ft = 0; }
-    else if (!this.onGround) { this.anim = A('run'); this.frame = carry ? (this.vy < 0 ? 1 : 3) : (this.vy < 0 ? 1 : 4); }
+    // 待機・ガード中は武器を構えたポーズ（振りの1コマ目）。歩き・走りは武器をしまう
+    const ready = this.weapon && SPRITE_DATA.swing[this.weapon] ? `swing_${this.weapon}` : null;
+    if (this.guarding) { this.anim = ready || 'idle'; this.frame = 0; this.ft = 0; }
+    else if (!this.onGround) { this.anim = 'run'; this.frame = this.vy < 0 ? 2 : 6; }
     else if (move) {
-      const nextAnim = A(run ? 'run' : 'walk');
+      const nextAnim = run ? 'run' : 'walk';
       if (this.anim !== nextAnim) { this.anim = nextAnim; this.frame = 0; this.ft = 0; }
       this.ft += dt; const fd = run ? 0.075 : 0.13;
       if (this.ft > fd) { this.ft = 0; this.frame = (this.frame + 1) % spriteSet(this.anim).frames.length; if (run && this.frame % 3 === 0) W.dust(this.x - this.face * 20, this.y, 2); }
-    } else if (carry) {
-      this.anim = A('walk'); this.frame = 0; this.ft = 0;
+    } else if (ready) {
+      this.anim = ready; this.frame = 0; this.ft = 0;
     } else {
       if (this.anim !== 'idle') { this.anim = 'idle'; this.frame = 0; this.ft = 0; }
-      this.ft += dt; if (this.ft > 0.22) { this.ft = 0; this.frame = (this.frame + 1) % 4; }
+      this.ft += dt; if (this.ft > 0.3) { this.ft = 0; this.frame = (this.frame + 1) % spriteSet('idle').frames.length; }
     }
     this.physics(dt);
   }
   physics(dt) {
     const W = this.w;
     if (this.state === 'attack' || this.state === 'hurt') this.vx *= Math.pow(0.0005, dt);
-    this.vy += 2100 * dt;
+    if (!(this.state === 'dodge' && !this.onGround)) this.vy += 2100 * dt; // 空中回避中は落ちない
     this.x += this.vx * dt; this.y += this.vy * dt;
-    if (this.y >= GROUND_Y) { if (!this.onGround && this.vy > 300) W.dust(this.x, GROUND_Y, 4); this.y = GROUND_Y; this.vy = 0; this.onGround = true; }
+    if (this.y >= GROUND_Y) {
+      if (!this.onGround && this.vy > 300) W.dust(this.x, GROUND_Y, 4);
+      this.y = GROUND_Y; this.vy = 0; this.onGround = true; this.jumps = 0; this.airDodged = false;
+    } else if (this.onGround) this.onGround = false;
     const lo = W.camLock ? W.camLock.min + 60 : 30, hi = W.camLock ? W.camLock.max + VIEW_W - 60 : W.ch.length - 30;
     this.x = clamp(this.x, lo, hi);
   }
@@ -216,7 +228,7 @@ class Player {
       return true;
     }
     this.hp = Math.max(this.minHp, this.hp - dmg);
-    this.inv = 1.0; this.hurtT = 0.8; this.state = 'hurt'; this.atk = null; this.guarding = false;
+    this.inv = 1.0; this.hurtT = 0.8; this.state = 'hurt'; this.atk = null; this.guarding = false; this.anim = 'hurt'; this.frame = 0;
     this.vx = (this.x < fromX ? -1 : 1) * 320; this.vy = -280; this.onGround = false;
     Audio2.sfx('hurt'); this.w.shake = Math.max(this.w.shake, 6); this.w.hitstop = 0.06;
     this.w.floatText(this.x, this.y - 120, '-' + dmg, '#ff7a8a', 18);
@@ -256,7 +268,6 @@ class Player {
     ctx.globalAlpha = 1;
     if (this.guarding) this.drawGuard(ctx, cam);
     if (this.atk) this.drawWeapon(ctx, cam);
-    else if (!(SPRITE_DATA.carry && SPRITE_DATA.carry[this.weapon])) this.drawHeld(ctx, cam);
   }
   drawGuard(ctx, cam) {
     const x = this.x - cam + this.face * 30, y = this.y - 70;
