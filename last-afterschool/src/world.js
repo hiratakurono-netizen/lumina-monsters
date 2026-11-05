@@ -168,7 +168,7 @@ class World {
         e.poise += dmg;
         if (e.poise > 170 && (e.state === 'move' || e.state === 'recover')) { e.poise = 0; e.state = 'stagger'; e.st = 1.1; e.vx = P.face * 160; this.floatText(e.x, e.y - 230, 'BREAK!', '#9fe0ff', 24); }
       } else {
-        e.vx = P.face * (h.kb || 150) * (atk.special ? 1.4 : 1);
+        e.vx = (Math.sign(e.x - P.x) || P.face) * (h.kb || 150) * (atk.special ? 1.4 : 1); // 主人公から離れる向きに飛ばす
         if (h.launch) { e.vy = -h.launch; e.launched = true; e.onGround = false; }
         e.stun = 0.35 + (el === 'sand' ? 0.3 : 0) + (h.launch ? 0.3 : 0);
         e.state = 'move';

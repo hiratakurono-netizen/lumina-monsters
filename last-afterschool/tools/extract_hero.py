@@ -35,7 +35,7 @@ SMART_SPLIT = ('hero_kick.jpg',)
 TARGET_FIG_H = 300   # idle figure height in the saved sprite (= 150 world px at scale 0.5)
 WORLD_SCALE = 0.5
 WEAPON_ANIMS = ('bat', 'chair', 'desk')
-FLIP = ('bat',)          # 元絵が左向きに振っているので右向きにそろえる
+FLIP = ()                # 反転すると敵に背を向けて振る絵になるので、どのシートも元の向きのまま使う
 HEAD_ALIGN = ('run',)    # 空中のコマがあるので、足元ではなく頭の高さでそろえる
 
 

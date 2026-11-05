@@ -42,13 +42,14 @@ const WEAPONS = {
     step: [0, 0, 20, 30, 60, 0, 0, 0], cancelAt: 5,
   },
   // 振りは主人公の振りモーション（SPRITE_DATA.swing）。arc は属性の軌跡を出す先端位置の近似（度・前方が+90）
+  // バットは体の正面から後ろ側へ振り抜く絵なので、当たり判定は前後に広く取る
   bat: {
     name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swing_bat', swing: 'bat', size: 'S', weapon: 'bat', element: 'sand',
     frameMs: [60, 60, 50, 60, 70, 70, 80, 90],
-    arc: [-30, -50, 90, 110, 110, 100, 90, -20],
+    arc: [-10, -20, -100, -110, -110, -100, -90, -10],
     hits: [
-      { frame: 2, dmg: 10, box: [-10, -140, 120, -5], kb: 150, stop: 50 },
-      { frame: 3, dmg: 18, box: [-10, -140, 135, -5], kb: 260, launch: 200, stop: 70, shake: 5 },
+      { frame: 2, dmg: 10, box: [-150, -140, 110, -5], kb: 150, stop: 50 },
+      { frame: 3, dmg: 18, box: [-150, -140, 120, -5], kb: 260, launch: 200, stop: 70, shake: 5 },
     ],
     step: [0, 0, 30, 50, 30, 0, 0, 0], cancelAt: 5,
   },
