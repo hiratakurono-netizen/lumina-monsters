@@ -7,7 +7,7 @@ import os, sys
 import numpy as np
 from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from extract_biomes import key, crop, SRC, OUT
+from extract_biomes import key, crop, keep_main, SRC, OUT
 
 SETS = {
     'town2': {'sheet': 'sheet_env_town2.jpg', 'bg': (20, 71, 128),
@@ -31,7 +31,7 @@ SETS = {
         'props': {'lockers': (820, 386, 948, 518), 'firebox': (996, 404, 1060, 484), 'cabinet': (1072, 384, 1176, 518),
                   'fridge': (1186, 386, 1266, 516), 'counter': (820, 562, 1052, 660), 'dishrack': (1058, 596, 1142, 660),
                   'stools': (1158, 604, 1232, 664), 'i_knife': (50, 48, 150, 145), 'i_pan': (222, 48, 334, 135),
-                  'i_apron': (372, 36, 466, 158), 'i_recipe': (606, 36, 716, 155)}},
+                  'i_apron': (420, 38, 526, 166), 'i_recipe': (606, 36, 716, 155)}},
     'roof': {'sheet': 'sheet_env_roof.jpg', 'bg': (18, 69, 122),
         'bands': [(1078, 27, 1509, 119), (811, 124, 1509, 219), (811, 227, 1509, 321)],   # 空は左上に文字があるので右側だけ
         'strips': {'floor': (9, 303, 565, 347), 'walkway': (9, 359, 565, 404), 'concrete': (9, 417, 565, 461)},
@@ -48,7 +48,9 @@ def main():
         for i, b in enumerate(B['bands']): save(Image.fromarray(crop(a, b).astype(np.uint8)), f'band{i}')
         for n, b in B['strips'].items(): save(Image.fromarray(crop(a, b).astype(np.uint8)), n)
         for n, b in B['props'].items():
-            img = key(crop(a, b), B['bg']); bb = img.getbbox(); save(img.crop(bb) if bb else img, n)
+            img = key(crop(a, b), B['bg'], tol=95, trim=2)
+            if n.startswith('i_'): img = keep_main(img)
+            bb = img.getbbox(); save(img.crop(bb) if bb else img, n)
         print(name, 'ok')
 
 if __name__ == '__main__':

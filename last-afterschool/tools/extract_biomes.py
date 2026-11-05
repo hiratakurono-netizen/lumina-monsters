@@ -92,6 +92,25 @@ def key(a, bg, tol=70, trim=1):
     img = Image.fromarray(np.dstack([a.astype(np.uint8), np.where(fg, 255, 0).astype(np.uint8)]), 'RGBA')
     return img
 
+def keep_main(img, frac=0.15):
+    """一番大きい塊の frac 以上の塊だけ残す（アイコンのまわりの点や、見出しの文字を落とす）"""
+    arr = np.asarray(img).copy(); fg = arr[..., 3] > 0; h, w = fg.shape
+    lab = np.zeros((h, w), int); sizes = [0]
+    for sy, sx in zip(*np.nonzero(fg)):
+        if lab[sy, sx]: continue
+        n = len(sizes); lab[sy, sx] = n; q = deque([(sy, sx)]); cnt = 0
+        while q:
+            y, x = q.popleft(); cnt += 1
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w and fg[ny, nx] and not lab[ny, nx]: lab[ny, nx] = n; q.append((ny, nx))
+        sizes.append(cnt)
+    keep = np.isin(lab, [i for i, n in enumerate(sizes) if i and n >= max(sizes) * frac])
+    arr[..., 3] = np.where(keep, arr[..., 3], 0)
+    out = Image.fromarray(arr, 'RGBA'); bb = out.getbbox()
+    return out.crop(bb) if bb else out
+
 def crop(a, b, inset=0): return a[b[1] + inset:b[3] - inset, b[0] + inset:b[2] - inset]
 
 def key_silhouette(a, tol=48, step=20):
@@ -145,7 +164,9 @@ def main():
             save(img, f'layer{i}')
         for n in ('ground', 'oneway'): save(Image.fromarray(crop(a, B[n], 3).astype(np.uint8)), n)
         for n, b in B['props'].items():
-            img = key(crop(a, b), B['bg'], tol=95, trim=2); bb = img.getbbox(); save(img.crop(bb) if bb else img, n)
+            img = key(crop(a, b), B['bg'], tol=95, trim=2)
+            if n.startswith('i_'): img = keep_main(img)   # 武器アイコン：まわりの点を落とす
+            bb = img.getbbox(); save(img.crop(bb) if bb else img, n)
         print(name, 'ok')
 
 if __name__ == '__main__':

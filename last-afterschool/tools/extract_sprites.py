@@ -142,7 +142,7 @@ MONSTERS = {
     'shroom':    (25, 235, 155, 335),
     'shroom_s':  (180, 260, 270, 335),
     'shroom_l':  (320, 210, 470, 340),
-    'sprout':    (495, 245, 575, 330),
+    'sprout':    (495, 205, 588, 330),
     'sprout2':   (605, 210, 735, 330),
     'imp':       (815, 245, 910, 330),
     'imp_s':     (950, 255, 1030, 330),
@@ -153,7 +153,7 @@ MONSTERS = {
     'knight_l':  (300, 370, 515, 530),
     'hood':      (590, 400, 710, 525),
     'reaper2':   (710, 370, 940, 530),
-    'eye_wing':  (975, 400, 1120, 470),
+    'eye_wing':  (968, 392, 1126, 492),
     'eye_bat':   (1130, 380, 1330, 530),
     'eye_mech':  (1360, 400, 1515, 525),
     'golem_s':   (25, 580, 150, 725),
@@ -173,12 +173,12 @@ MONSTERS = {
     'eldereye':  (1270, 760, 1520, 990),
 }
 
-def key_monster(a, box, tol=30):
+def key_monster(a, box, tol=7):   # 背景は (18,22,40) のほぼ単色。許容差を大きくすると暗い体の色まで抜けて透けるので小さく
     x0, y0, x1, y1 = box
     cell = a[y0:y1, x0:x1]
     h, w, _ = cell.shape
     lum = cell.mean(axis=2)
-    bgcol = np.array([24, 24, 40])
+    bgcol = np.array([18, 22, 40])
     dist = np.abs(cell - bgcol).sum(axis=2)
     near = dist < tol * 3
     seen = np.zeros((h, w), bool)
@@ -195,7 +195,22 @@ def key_monster(a, box, tol=30):
             ny, nx = y + dy, x + dx
             if 0 <= ny < h and 0 <= nx < w and not seen[ny, nx] and near[ny, nx]:
                 seen[ny, nx] = True; q.append((ny, nx))
-    alpha = np.where(seen, 0, 255).astype(np.uint8)
+    fg = ~seen
+    # 枠に入り込んだ隣のモンスターの切れ端を落とす：一番大きい塊の1割以上の塊だけ残す
+    lab = np.zeros((h, w), int); sizes = [0]
+    for sy, sx in zip(*np.nonzero(fg)):
+        if lab[sy, sx]: continue
+        n = len(sizes); lab[sy, sx] = n; q = deque([(sy, sx)]); cnt = 0
+        while q:
+            y, x = q.popleft(); cnt += 1
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w and fg[ny, nx] and not lab[ny, nx]: lab[ny, nx] = n; q.append((ny, nx))
+        sizes.append(cnt)
+    big = max(sizes)
+    keep = np.isin(lab, [i for i, n in enumerate(sizes) if i and n >= big * 0.1])
+    alpha = np.where(keep, 255, 0).astype(np.uint8)
     img = Image.fromarray(np.dstack([cell.astype(np.uint8), alpha]), 'RGBA')
     bb = img.getbbox()
     return img.crop(bb) if bb else img
