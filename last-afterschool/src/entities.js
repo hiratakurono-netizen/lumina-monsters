@@ -94,6 +94,10 @@ class Player {
     const a = this.atk, def = a.def;
     const st = (def.step && def.step[a.frame]) || 0;
     this.vx = st * this.face * 6;
+    if (def.smear && def.smear.frame === a.frame) {   // 振り抜きの残像と風切り
+      this.w.fx.push(new SwingSmear(this.x + this.face * 4, this.y - 82 * HERO_SIZE, def.smear, this.face, ELEMENTS[this.element]));
+      this.w.shake = Math.max(this.w.shake, 2); Audio2.sfx('swingM');
+    }
     for (const h of def.hits) if (h.frame === a.frame) this.w.playerHit(this, h, a);
   }
   // 武器の角度（度）。前方が+90、真上が0
@@ -729,6 +733,26 @@ class SlashArc {
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k;
     ctx.strokeStyle = this.glow; ctx.lineWidth = 16 * (1 - k) + 2; ctx.beginPath(); ctx.arc(0, 0, this.r * (0.9 + k * 0.2), -1.4, 1.1); ctx.stroke();
     ctx.strokeStyle = this.color; ctx.lineWidth = 6 * (1 - k) + 1; ctx.beginPath(); ctx.arc(0, 0, this.r * (0.9 + k * 0.2), -1.3, 1.0); ctx.stroke();
+    ctx.restore();
+  }
+}
+// 振り抜きの残像：from（度）→ to（度）へ一気に伸びて、すぐ薄れる三日月
+class SwingSmear {
+  constructor(x, y, sm, face, E) { Object.assign(this, { x, y, sm, face, E, life: 0.24, max: 0.24 }); }
+  update(dt) { this.life -= dt; this.dead = this.life <= 0; }
+  draw(ctx, cam) {
+    const k = 1 - this.life / this.max, grow = Math.min(1, k / 0.25), fade = k < 0.35 ? 1 : 1 - (k - 0.35) / 0.65;
+    const a0 = this.sm.from * Math.PI / 180, a1 = a0 + (this.sm.to - this.sm.from) * Math.PI / 180 * grow, r = this.sm.r;
+    ctx.save(); ctx.translate(this.x - cam, this.y); ctx.scale(this.face, 1); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'butt';
+    const n = 18;
+    for (let i = 0; i < n; i++) {   // 先端ほど太く明るい
+      const t0 = i / n, t1 = (i + 1) / n + 0.01, w = 3 + 17 * t1;
+      ctx.globalAlpha = fade * (0.15 + 0.85 * t1 * t1);
+      ctx.strokeStyle = i > n - 4 ? '#ffffff' : this.E.color; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.arc(0, 0, r - w * 0.3, a0 + (a1 - a0) * t0, a0 + (a1 - a0) * t1); ctx.stroke();
+    }
+    ctx.globalAlpha = fade * 0.5; ctx.strokeStyle = this.E.glow; ctx.lineWidth = 2;   // 風切りの線
+    for (let i = 0; i < 4; i++) { const rr = r + 14 + i * 9; ctx.beginPath(); ctx.arc(0, 0, rr, a1 - 0.9 + i * 0.1, a1 - 0.1); ctx.stroke(); }
     ctx.restore();
   }
 }

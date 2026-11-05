@@ -6,15 +6,15 @@
 NAMES.town = '宵ヶ丘';   // 町の名前（仮）
 
 const TOWN = {
-  id: 'town', town: true, title: '現世', sub: `${NAMES.town}の町`, bg: 'town', bgm: 'morning', length: 2600,
+  id: 'town', town: true, title: '現世', sub: `${NAMES.town}の町`, bg: 'town', bgm: 'morning', length: 3020,
   loadout: { weapons: [], fire: false, partner: true, canFight: false },
   intro: [], events: [], endX: 99999, outro: [],
   facilities: [
-    { id: 'home',  x: 300,  name: '自宅' },
-    { id: 'shop',  x: 860,  name: 'コンビニ' },
-    { id: 'smith', x: 1380, name: '鍛冶屋' },
-    { id: 'mio',   x: 1760, name: NAMES.friend, npc: true },
-    { id: 'gate',  x: 2300, name: '学校の屋上' },
+    { id: 'home',  x: 340,  name: '自宅' },
+    { id: 'shop',  x: 980,  name: 'コンビニ' },
+    { id: 'smith', x: 1600, name: '鍛冶屋' },
+    { id: 'mio',   x: 2040, name: NAMES.friend, npc: true },
+    { id: 'gate',  x: 2660, name: '学校の屋上' },
   ],
 };
 
@@ -49,9 +49,11 @@ const Town = {
       R('#2a2140', x - w / 2, y - 18, w, 26); R('#b9a2ff', x - w / 2, y - 18, w, 2);
       ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.fillText(text, x, y); ctx.textAlign = 'left';
     };
+    const FZ = 1.45;   // 建物の拡大率（地面を基準に大きく描く）
     for (const f of TOWN.facilities) {
       const x = f.x - cam;
-      if (x < -200 || x > VIEW_W + 200) continue;
+      if (x < -320 || x > VIEW_W + 320) continue;
+      ctx.save(); ctx.translate(x, G); ctx.scale(f.npc ? 1 : FZ, f.npc ? 1 : FZ); ctx.translate(-x, -G);
       if (f.id === 'home') {
         R('#e8d8e2', x - 110, G - 190, 220, 190); ctx.fillStyle = '#7c5f8d';
         ctx.beginPath(); ctx.moveTo(x - 130, G - 190); ctx.lineTo(x, G - 260); ctx.lineTo(x + 130, G - 190); ctx.fill();
@@ -82,10 +84,11 @@ const Town = {
         ctx.fillStyle = g; ctx.fillRect(x - 130, G - 400, 260, 240); ctx.restore();
         sign(x, G - 128, '学校（屋上のゲート）');
       }
+      ctx.restore();
     }
     // 近くの施設の上に「しらべる」
     if (W.nearFac && !W.dialogue) {
-      const f = W.nearFac, x = f.x - cam, y = GROUND_Y - (f.npc ? 200 : 300) + Math.sin(t * 5) * 4;
+      const f = W.nearFac, x = f.x - cam, y = GROUND_Y - (f.npc ? 200 : 410) + Math.sin(t * 5) * 4;
       ctx.font = `15px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffe27a';
       ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4; const s = IS_TOUCH ? '▼ しらべる' : '▼ ↓ しらべる';
       ctx.strokeText(s, x, y); ctx.fillText(s, x, y); ctx.textAlign = 'left';
@@ -162,33 +165,54 @@ const Town = {
       }
       return parts.length ? h('span', {}, parts) : h('span', { class: 'ui-note' }, '変化なし');
     };
-    const equipTab = el => {
-      el.append(h('div', { class: 'ui-note' }, '枠をタップすると、付け替えられる装備が出ます。武器1〜3は戦闘中に「武器」ボタンで切り替え。'));
-      for (const [sl, label] of slotDefs) {
-        const uid = slotUid(sl), it = uid != null ? Inv.byUid(s, uid) : null;
-        const row = it ? itemRow(it) : h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name', style: { color: '#7d72a0' } }, '（なし）')])]);
-        row.prepend(h('div', { class: 'slot' }, label));
-        row.classList.toggle('sel', selSlot === sl);
-        row.addEventListener('click', () => { selSlot = selSlot === sl ? null : sl; Audio2.sfx('blip'); UI.render(); });
-        el.append(row);
-        if (selSlot === sl) {
-          const cands = s.bag.filter(c => Inv.slotOf(c) === kindOf(sl) && c.uid !== uid);
-          if (it) el.append(h('button', { class: 'ui-btn ghost', onclick: () => { Inv.unequip(s, sl); this.save(game); selSlot = null; UI.render(); } }, 'はずす'));
-          if (!cands.length) el.append(h('div', { class: 'ui-note' }, '付け替えられる装備がありません。'));
-          for (const c of cands) el.append(itemRow(c, [diffText(sl, c.uid), h('button', { class: 'ui-btn', onclick: e => { e.stopPropagation(); Inv.equip(s, sl, c.uid); this.save(game); Audio2.sfx('pickup'); selSlot = null; UI.render(); } }, '装備')]));
-        }
-      }
-    };
-    const bagTab = el => {
-      el.append(h('div', { class: 'ui-h' }, `装備品（${s.bag.length} / ${BAG_MAX}）`));
+    // ---- 装備・持ち物（中央に主人公、左右に装備枠、右に持ち物のアイコン一覧） ----
+    const st8 = this._home = this._home || { sel: null, cat: 'all' };
+    const kindLabel = { weapon: '武器', armor: '防具', accessory: 'アクセ' };
+    const firstSlot = kind => { const list = slotDefs.filter(([sl]) => kindOf(sl) === kind).map(([sl]) => sl); return list.find(sl => slotUid(sl) == null) || list[0]; };
+    const basicText = it => { const b = Inv.base(it); return b.kind === 'weapon' ? `威力 ${b.atk}${b.crit ? ` / 会心 +${b.crit}%` : ''}` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ') || '効果なし'; };
+    const icon = it => h('img', { src: Town.itemIcon(Inv.base(it)), alt: '', draggable: 'false' });
+    const pick = sel => () => { st8.sel = sel; Audio2.sfx('blip'); UI.render(); };
+    const dollTab = el => {
+      const wrap = h('div', { class: 'home' });
+      // 左：主人公と装備枠
+      const left = h('div', { class: 'home-left' });
+      const doll = h('div', { class: 'doll' });
+      const slotTile = ([sl, label], col, row) => {
+        const uid = slotUid(sl), it = uid != null ? Inv.byUid(s, uid) : null, on = st8.sel && st8.sel.slot === sl;
+        return h('button', { class: 'tile slot' + (on ? ' on' : '') + (it ? '' : ' empty'), style: { '--rc': it ? Inv.rarity(it).color : '#3b2d63', gridColumn: col, gridRow: row }, 'aria-label': `${label}：${it ? Inv.name(it) : 'なし'}`,
+          onclick: pick({ slot: sl, uid }) }, [it ? icon(it) : h('span', { class: 'slot-label' }, label), it && it.plus ? h('span', { class: 'badge' }, '+' + it.plus) : null, h('span', { class: 'cap' }, label)]);
+      };
+      slotDefs.slice(0, 3).forEach((d, i) => doll.append(slotTile(d, 1, i + 1)));
+      doll.append(h('div', { class: 'hero', style: { gridColumn: 2, gridRow: '1 / 4' } }, h('img', { src: Town.heroPortrait(), alt: NAMES.hero })));
+      slotDefs.slice(3).forEach((d, i) => doll.append(slotTile(d, 3, i + 1)));
+      left.append(doll);
+      // 右：持ち物
+      const right = h('div', { class: 'home-right' });
+      const cats = [['all', 'すべて'], ['weapon', '武器'], ['armor', '防具'], ['accessory', 'アクセ'], ['cons', '道具']];
+      right.append(h('div', { class: 'cats', role: 'tablist' }, cats.map(([k, n]) => h('button', { class: 'cat' + (st8.cat === k ? ' on' : ''), role: 'tab', 'aria-selected': String(st8.cat === k), onclick: () => { st8.cat = k; Audio2.sfx('blip'); UI.render(); } }, n))));
+      const grid = h('div', { class: 'inv-grid' });
       const order = { weapon: 0, armor: 1, accessory: 2 };
-      [...s.bag].sort((a, b) => order[Inv.slotOf(a)] - order[Inv.slotOf(b)] || Inv.rarity(b).tier - Inv.rarity(a).tier).forEach(it => el.append(itemRow(it)));
-      // 一覧で見たので「NEW」を外す（表示は次に開いた時から消える）
-      if (s.bag.some(it => it.isNew)) { s.bag.forEach(it => { delete it.isNew; }); this.save(game); }
-      el.append(h('div', { class: 'ui-h' }, '消耗品'));
-      const ids = Object.keys(CONSUMABLES).filter(id => Inv.count(s, id));
-      if (!ids.length) el.append(h('div', { class: 'ui-note' }, 'なし'));
-      ids.forEach(id => el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${CONSUMABLES[id].name} ×${Inv.count(s, id)}`), h('div', { class: 'sub' }, CONSUMABLES[id].desc)])])));
+      const want = st8.sel && st8.sel.slot ? kindOf(st8.sel.slot) : null;
+      if (st8.cat !== 'cons') {
+        [...s.bag].filter(it => st8.cat === 'all' || Inv.slotOf(it) === st8.cat)
+          .sort((x, y) => order[Inv.slotOf(x)] - order[Inv.slotOf(y)] || Inv.rarity(y).tier - Inv.rarity(x).tier)
+          .forEach(it => {
+            const on = st8.sel && st8.sel.uid === it.uid && !st8.sel.slot, dim = want && Inv.slotOf(it) !== want;
+            grid.append(h('button', { class: 'tile' + (on ? ' on' : '') + (dim ? ' dim' : ''), style: { '--rc': Inv.rarity(it).color }, 'aria-label': Inv.name(it), onclick: pick({ uid: it.uid }) },
+              [icon(it), Inv.isEquipped(s, it.uid) ? h('span', { class: 'eq' }, 'E') : null, it.isNew ? h('span', { class: 'new' }) : null, it.plus ? h('span', { class: 'badge' }, '+' + it.plus) : null]));
+          });
+      }
+      if (st8.cat === 'all' || st8.cat === 'cons') {
+        Object.keys(CONSUMABLES).filter(id => Inv.count(s, id)).forEach(id => {
+          const on = st8.sel && st8.sel.cons === id;
+          grid.append(h('button', { class: 'tile' + (on ? ' on' : ''), style: { '--rc': '#5a4d86' }, 'aria-label': CONSUMABLES[id].name, onclick: pick({ cons: id }) },
+            [h('img', { src: Town.itemIcon({ kind: 'cons', id }), alt: '' }), h('span', { class: 'badge' }, String(Inv.count(s, id)))]));
+        });
+      }
+      if (!grid.children.length) grid.append(h('div', { class: 'ui-note' }, 'ここには何もありません。'));
+      right.append(grid, h('div', { class: 'inv-count' }, `装備品 ${s.bag.length} / ${BAG_MAX}`));
+      wrap.append(left, right); el.append(wrap, this.homeDetail(game, st8, { slotDefs, slotUid, kindOf, firstSlot, basicText, diffText, kindLabel }));   // 詳細は画面下に固定
+      if (s.bag.some(it => it.isNew)) { s.bag.forEach(it => { delete it.isNew; }); this.save(game); }   // 見たので NEW を外す（次に開いた時から消える）
     };
     const statusTab = el => {
       const st = Stats.calc(s), need = expNeed(s.lv);
@@ -213,10 +237,68 @@ const Town = {
         catch (e) { msg.textContent = '読み込めませんでした：' + e.message; }
       } }, '読み込む'), msg);
     };
-    UI.open({ title: '自宅', headRight: this.goldHead(game), tabs: [
-      { label: '装備', render: equipTab }, { label: '持ち物', render: bagTab }, { label: 'ステータス', render: statusTab }, { label: 'セーブ', render: saveTab }] });
+    st8.sel = null;
+    UI.open({ title: '自宅', wide: true, headRight: this.goldHead(game), tabs: [
+      { label: '装備・持ち物', render: dollTab }, { label: 'ステータス', render: statusTab }, { label: 'セーブ', render: saveTab }] });
   },
 
+  // 選んだ物の詳細と操作（装備・はずす・比較）
+  homeDetail(game, st8, k) {
+    const s = game.save, h = UI.h, sel = st8.sel, box = h('div', { class: 'detail' });
+    const done = (msg) => { this.save(game); Audio2.sfx('pickup'); if (msg) UI.toast(msg); UI.render(); };
+    if (!sel) {
+      const st = Stats.calc(s);
+      box.append(h('div', { class: 'd-name' }, `${NAMES.hero}　Lv ${s.lv}`),
+        h('div', { class: 'd-stats' }, [`HP ${st.maxHp}`, `防御 ${st.def}`, `会心 ${st.crit}%`, `攻撃 +${st.atkPct}%`].map(t => h('span', {}, t))),
+        h('div', { class: 'd-sub' }, '装備枠か持ち物のアイコンをタップしてください。'));
+      return box;
+    }
+    if (sel.cons) {
+      const c = CONSUMABLES[sel.cons];
+      box.append(h('div', { class: 'd-name' }, `${c.name} ×${Inv.count(s, sel.cons)}`), h('div', { class: 'd-sub' }, c.desc + '（ダンジョンの「道具」から使えます）'));
+      return box;
+    }
+    const it = sel.uid != null ? Inv.byUid(s, sel.uid) : null;
+    if (!it) {   // 空の装備枠
+      box.append(h('div', { class: 'd-name' }, `${k.slotDefs.find(d => d[0] === sel.slot)[1]}：なし`), h('div', { class: 'd-sub' }, `右の一覧から${k.kindLabel[k.kindOf(sel.slot)]}を選ぶと、ここに装備できます。`));
+      return box;
+    }
+    const r = Inv.rarity(it), kind = Inv.slotOf(it), equipped = Inv.isEquipped(s, it.uid);
+    box.style.setProperty('--rc', r.color);
+    box.append(h('div', { class: 'd-name' }, [Inv.name(it), h('span', { class: 'd-rar' }, r.name)]),
+      h('div', { class: 'd-sub' }, [k.basicText(it), ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join('')));
+    const acts = h('div', { class: 'd-acts' });
+    if (equipped) {
+      const sl = k.slotDefs.map(d => d[0]).find(x => k.slotUid(x) === it.uid);
+      acts.append(h('button', { class: 'ui-btn ghost', onclick: () => { Inv.unequip(s, sl); st8.sel = { slot: sl, uid: null }; done(); } }, 'はずす'));
+    } else {
+      // 装備先：選んでいる枠があればそこ、なければ空いている枠（全部埋まっていれば1つ目）
+      const targets = sel.slot && k.kindOf(sel.slot) === kind ? [sel.slot] : k.slotDefs.filter(([x]) => k.kindOf(x) === kind).map(([x]) => x);
+      const main = sel.slot && k.kindOf(sel.slot) === kind ? sel.slot : k.firstSlot(kind);
+      box.append(h('div', { class: 'd-cmp' }, [`${k.slotDefs.find(d => d[0] === main)[1]}と比べると：`, k.diffText(main, it.uid)]));
+      targets.forEach(x => acts.append(h('button', { class: 'ui-btn' + (x === main ? '' : ' ghost'), onclick: () => { Inv.equip(s, x, it.uid); st8.sel = { slot: x, uid: it.uid }; done(); } },
+        targets.length > 1 ? `${k.slotDefs.find(d => d[0] === x)[1]}に装備` : '装備する')));
+    }
+    box.append(acts);
+    return box;
+  },
+  // 持ち物のアイコン（武器は武器の絵、ほかは小さなドット絵）をキャッシュして返す
+  _icons: {},
+  itemIcon(b) {
+    const key = b.kind === 'weapon' ? 'w_' + b.type : b.kind === 'cons' ? 'c_' + b.id : b.kind;
+    if (this._icons[key]) return this._icons[key];
+    if (b.kind === 'weapon') return (this._icons[key] = WEAPON_ART[b.type].file);
+    const c = document.createElement('canvas'); c.width = 48; c.height = 48; const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+    Icons.draw(x, b.kind === 'cons' ? b.id : b.kind === 'armor' ? 'armor' : 'acc', 24, 26, 2.4);
+    return (this._icons[key] = c.toDataURL());
+  },
+  heroPortrait() {
+    if (this._hero) return this._hero;
+    const set = SPRITE_DATA.heroine.idle, f = set.frames[0], img = IMG[set.img];
+    const c = document.createElement('canvas'); c.width = f.w; c.height = f.h;
+    c.getContext('2d').drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+    return (this._hero = c.toDataURL());
+  },
   // ---- コンビニ：買う・売る ----
   // 消耗品の品ぞろえ。need が true の時だけ並ぶ（進行で増える）
   SHOP_STOCK: [

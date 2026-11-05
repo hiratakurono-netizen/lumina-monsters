@@ -47,13 +47,15 @@ const WEAPONS = {
   // バットは体の正面から後ろ側へ振り抜く絵なので、当たり判定は前後に広く取る
   bat: {
     name: '砂纏いのバット', from: '野球バット', icon: 'bat', anim: 'swing_bat', swing: 'bat', size: 'S', weapon: 'bat', element: 'sand',
-    frameMs: [60, 60, 50, 60, 70, 70, 80, 90],
+    // 振り抜き感：構え（1〜2コマ目）で溜めて、3〜4コマ目を一瞬で振り抜き、5コマ目の振り切った姿勢で止める
+    frameMs: [90, 130, 35, 40, 170, 70, 70, 80],
     arc: [-10, -20, -100, -110, -110, -100, -90, -10],
+    smear: { frame: 2, from: -95, to: 150, r: 78 },   // 頭上→正面→背中側へ弧を描く残像
     hits: [
-      { frame: 2, dmg: 10, box: [-150, -140, 110, -5], kb: 150, stop: 50 },
-      { frame: 3, dmg: 18, box: [-150, -140, 120, -5], kb: 260, launch: 200, stop: 70, shake: 5 },
+      { frame: 2, dmg: 12, box: [-60, -150, 130, -5], kb: 200, stop: 60, shake: 3 },
+      { frame: 3, dmg: 16, box: [-150, -140, 120, -5], kb: 300, launch: 220, stop: 80, shake: 6 },
     ],
-    step: [0, 0, 30, 50, 30, 0, 0, 0], cancelAt: 5,
+    step: [0, -10, 80, 40, 0, 0, 0, 0], cancelAt: 5,
   },
   chair: {
     name: '椅子', from: '椅子', icon: 'chair', anim: 'swing_chair', swing: 'chair', size: 'M', weapon: 'chair',

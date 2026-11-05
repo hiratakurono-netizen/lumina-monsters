@@ -176,7 +176,7 @@ class World {
     const box = P.face > 0 ? [P.x + b[0], P.y + b[1], P.x + b[2], P.y + b[3]] : [P.x - b[2], P.y + b[1], P.x - b[0], P.y + b[3]];
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2, r = Math.max(40, (box[2] - box[0]) * 0.45);
     // 斬撃のエフェクト：属性なしでも出す（新しい振りの絵には斬撃が描かれていないため）
-    if (atk.key !== 'kick') this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
+    if (atk.key !== 'kick' && !def.smear) this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
     // 紫の爆発エフェクトは必殺専用（その技の最後の一撃で出す）
     if (atk.special && h === def.hits[def.hits.length - 1]) {
       this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el)); this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);
@@ -502,6 +502,11 @@ const Icons = {
         R('#e6e6ea', -10, 2, 4, 3); R('#e6e6ea', 6, 2, 4, 3); break;
       case 'armor': R('#e8e4f0', -8, -8, 16, 14); R('#e8e4f0', -12, -8, 4, 7); R('#e8e4f0', 8, -8, 4, 7); R('#2a2540', -2, -8, 4, 4); R('#b03050', -2, -4, 4, 2); break;
       case 'acc': ctx.strokeStyle = '#ffd36a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7); ctx.stroke(); R('#9fe0ff', -2, -9, 4, 4); break;
+      case 'bento': R('#2a2540', -10, -6, 20, 12); R('#f2efe9', -9, -5, 8, 10); R('#e05a5a', -6, -2, 3, 3); R('#7fb069', 1, -5, 8, 5); R('#ffd36a', 1, 0, 8, 5); break;
+      case 'bell': R('#ffd36a', -6, -6, 12, 10); R('#ffe9a8', -4, -6, 3, 6); R('#b8860b', -8, 4, 16, 2); R('#b8860b', -1, 6, 2, 3); R('#c9a2ff', -1, -10, 2, 4); break;
+      case 'water': R('#bfe0ff', -4, -10, 8, 3); R('#e8f4ff', -6, -7, 12, 16); R('#6ab4ff', -6, 0, 12, 9); break;
+      case 'cooler': R('#9fe0ff', -8, -7, 16, 14); R('#e8f8ff', -6, -5, 5, 5); R('#5aa8d8', -8, 5, 16, 2); break;
+      case 'power': R('#ff9ec0', -5, -5, 10, 10); R('#fff', -3, -3, 3, 3); R('#e05a8a', -11, -2, 6, 4); R('#e05a8a', 5, -2, 6, 4); break;
       case 'gold': R('#b8860b', -5, -5, 10, 10); R('#ffd36a', -4, -4, 8, 8); R('#fff3b0', -2, -3, 2, 4); break;
       case 'milk': R('#fff', -5, -8, 10, 14); R('#ff9ec0', -5, -2, 10, 8); R('#fff', -5, -11, 10, 3); R('#e07aa0', -2, 0, 4, 3); break;
       case 'kick': R('#e8e4f0', -6, -2, 12, 5); R('#3a3550', -6, 3, 12, 2); R('#2a2540', -3, -10, 5, 8); break;

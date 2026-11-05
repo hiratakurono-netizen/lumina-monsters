@@ -40,10 +40,11 @@ const UI = (() => {
   }
   function render() {
     if (!cur) return;
-    root.innerHTML = '';
+    const old = root.querySelector('.ui-body'), keep = old && root.dataset.tab === String(tab) ? old.scrollTop : 0;   // 同じタブなら位置を保つ
+    root.innerHTML = ''; root.dataset.tab = String(tab);
     const tabs = cur.tabs || [];
     const body = h('div', { class: 'ui-body' });
-    const panel = h('div', { class: 'ui-panel', role: 'dialog', 'aria-label': cur.title }, [
+    const panel = h('div', { class: 'ui-panel' + (cur.wide ? ' wide' : ''), role: 'dialog', 'aria-label': cur.title }, [
       h('div', { class: 'ui-head' }, [
         h('div', { class: 'ui-title' }, cur.title),
         cur.headRight ? h('div', { class: 'ui-head-right' }, cur.headRight()) : null,
@@ -55,6 +56,7 @@ const UI = (() => {
     ]);
     root.append(h('div', { class: 'ui-backdrop', onclick: close }), panel);
     if (tabs[tab]) tabs[tab].render(body);
+    body.scrollTop = keep;
   }
   // ちょっとした通知（「保存しました」など）
   function toast(msg) {

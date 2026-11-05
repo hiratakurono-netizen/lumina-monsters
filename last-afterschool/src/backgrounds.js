@@ -212,7 +212,7 @@ const Backgrounds = (() => {
       for (let i = 0; i < 1920; i += 48) R(fx, '#8b7f9c', i, 14, 2, 58);
       R(fx, '#c9bfd6', 0, 0, 1920, 3);
     });
-    return { sky: s, layers: [{ img: far, f: 0.15, y: 50 }, { img: m, f: 0.5, y: 0 }], floor, ambient: 'petal' };
+    return { sky: s, layers: [{ img: far, f: 0.15, y: 50 }, { img: m, f: 0.5, y: 0 }], floor, ambient: 'petal', zoom: 1.4 };
   }
 
 
@@ -241,7 +241,7 @@ const Backgrounds = (() => {
       for (let k = 0; k < 14; k++) { mx.beginPath(); mx.arc(tx + 6 + (r() - 0.5) * 100, 290 + (r() - 0.5) * 60, 12 + r() * 12, 0, 7); mx.fill(); }
     }
     const floor = floorTile([['#0e0818', 0, 72]], x => { x.fillStyle = 'rgba(120,80,200,.18)'; for (let i = 0; i < 40; i++) x.fillRect(rng(9)() * 1920, 20 + (i % 5) * 10, 3, 3); });
-    return { sky: s, layers: [{ img: far, f: 0.15, y: 60 }, { img: m, f: 0.45, y: 0 }], floor, ambient: 'mote' };
+    return { sky: s, layers: [{ img: far, f: 0.15, y: 60 }, { img: m, f: 0.45, y: 0 }], floor, ambient: 'mote', zoom: 1.4 };
   }
 
   function floorTile(bands, extra) {
@@ -262,9 +262,11 @@ const Backgrounds = (() => {
 
   function draw(ctx, bg, camX) {
     ctx.drawImage(bg.sky, 0, 0);
+    // zoom：遠景・中景を地面の高さを基準に拡大する（町・魔界は 1.4 倍で建物や木を大きく見せる）
+    const z = bg.zoom || 1;
     for (const L of bg.layers) {
-      const w = L.img.width, off = -((camX * L.f) % w);
-      for (let x = off; x < VIEW_W; x += w) ctx.drawImage(L.img, Math.floor(x), L.y);
+      const w = L.img.width * z, h = L.img.height * z, y = GROUND_Y + (L.y - GROUND_Y) * z, off = -((camX * L.f) % w);
+      for (let x = off; x < VIEW_W; x += w) ctx.drawImage(L.img, Math.floor(x), Math.floor(y), Math.ceil(w) + 1, h);
     }
     const w = bg.floor.width, off = -(camX % w);
     for (let x = off; x < VIEW_W; x += w) ctx.drawImage(bg.floor, Math.floor(x), GROUND_Y);
