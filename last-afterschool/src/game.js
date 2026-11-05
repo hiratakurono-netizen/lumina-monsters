@@ -466,7 +466,7 @@ const Game = {
     if (this.t < 1) return;
     if (tap) { const i = tap.y > 350 && tap.y < 400 ? 0 : tap.y >= 400 && tap.y < 440 ? 1 : -1; if (i >= 0) { this.menu = i; Input.tap(); } }
     if (Input.hit('up') || Input.hit('down') || Input.hit('left') || Input.hit('right')) { this.menu ^= 1; Audio2.sfx('blip'); }
-    if (Input.confirm()) { const i = this.world.chIdx; if (this.menu === 0) this.transition(() => this.startChapter(i)); else this.transition(() => { this.scene = 'title'; Audio2.playBgm('sorrow'); }); }
+    if (Input.confirm()) { const i = this.world.chIdx; if (this.menu === 0 && i >= 0) this.transition(() => this.startChapter(i)); else if (this.menu === 0) { const ch = this.world.ch; this.transition(() => { this.world = new World(ch, this.save, this); this.card = { t: 0 }; this.scene = 'card'; }); } else this.transition(() => { this.scene = 'title'; Audio2.playBgm('sorrow'); }); }
   },
   d_gameover() {
     this.world.draw(ctx);

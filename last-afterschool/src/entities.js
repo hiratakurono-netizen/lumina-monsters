@@ -152,7 +152,9 @@ class Player {
     if (control) {
       if (I.held.left) move -= 1;
       if (I.held.right) move += 1;
-      if (I.hit('jump')) {
+      if (I.hit('jump') && I.held.down && this.onGround && W.terrain.surfaceAt(this.x, this.y, 12) && W.terrain.surfaceAt(this.x, this.y, 12).type === 'oneway') {
+        this.dropT = 0.25; this.onGround = false; this.vy = 60;  // すり抜け床から降りる
+      } else if (I.hit('jump')) {
         if (this.onGround) { this.vy = -780; this.onGround = false; this.jumps = 1; Audio2.sfx('jump'); }
         else if (this.jumps < 2) { // 空中2段ジャンプ
           this.vy = -700; this.jumps = 2; Audio2.sfx('jump');
@@ -178,7 +180,7 @@ class Player {
       this.state = 'dodge'; this.dodgeT = 0.28; this.dodgeCD = 0.7; this.inv = 0.32;
       this.face = move; this.vx = move * 560; this.guarding = false;
       if (!this.onGround) { this.airDodged = true; this.vy = 0; }
-      else W.dust(this.x, GROUND_Y, 5);
+      else W.dust(this.x, this.y, 5);
       Audio2.sfx('jump');
       return this.physics(dt);
     }
@@ -207,13 +209,31 @@ class Player {
     const W = this.w;
     if (this.state === 'attack' || this.state === 'hurt') this.vx *= Math.pow(0.0005, dt);
     if (!(this.state === 'dodge' && !this.onGround)) this.vy += 2100 * dt; // 空中回避中は落ちない
-    this.x += this.vx * dt; this.y += this.vy * dt;
-    if (this.y >= GROUND_Y) {
-      if (!this.onGround && this.vy > 300) W.dust(this.x, GROUND_Y, 4);
-      this.y = GROUND_Y; this.vy = 0; this.onGround = true; this.jumps = 0; this.airDodged = false;
+    // 地形との当たり（プロローグは GROUND_Y の平らな床なので、これまでと同じ動きになる）
+    const T = W.terrain, prevX = this.x, prevY = this.y;
+    this.dropT = Math.max(0, (this.dropT || 0) - dt);
+    this.x += this.vx * dt;
+    this.x = T.blockX(this.x, prevX, this.y - 120, this.y - 4, 18);
+    this.y += this.vy * dt;
+    if (this.vy < 0) { const c = T.ceiling(this.x, prevY - 120, this.y - 120, 14); if (c !== null) { this.y = c + 120; this.vy = 0; } }
+    const g = T.groundBelow(this.x, prevY, 12, this.dropT > 0);
+    if (this.vy >= 0 && this.y >= g) {
+      if (!this.onGround && this.vy > 300) W.dust(this.x, g, 4);
+      this.y = g; this.vy = 0; this.onGround = true; this.jumps = 0; this.airDodged = false;
+      this.safe = { x: this.x, y: g };  // 穴に落ちた時に戻る場所
     } else if (this.onGround) this.onGround = false;
     const lo = W.camLock ? W.camLock.min + 60 : 30, hi = W.camLock ? W.camLock.max + VIEW_W - 60 : W.ch.length - 30;
     this.x = clamp(this.x, lo, hi);
+    if (this.y > VIEW_H + 80) this.fellInPit();
+  }
+  // 穴に落ちた：最大HPの15%（仮）のダメージで、直前の足場へ戻る
+  fellInPit() {
+    const W = this.w, s = this.safe || { x: 140, y: GROUND_Y };
+    const d = Math.max(1, Math.round(this.maxHp * 0.15));
+    this.x = s.x; this.y = s.y - 2; this.vx = 0; this.vy = 0; this.onGround = false;
+    this.hp = Math.max(this.minHp, this.hp - d); this.inv = 1.0; this.state = 'idle'; this.atk = null;
+    Audio2.sfx('hurt'); W.floatText(this.x, this.y - 130, '-' + d, '#ff7a8a', 18);
+    if (this.hp <= 0) W.onPlayerDown();
   }
   hurt(dmg, fromX) {
     if (this.inv > 0 || this.w.state !== 'play') return false;
@@ -250,7 +270,9 @@ class Player {
     const blink = this.inv > 0 && this.state !== 'attack' && this.state !== 'dodge' && Math.floor(this.inv * 20) % 2 === 0;
     // 影
     ctx.fillStyle = 'rgba(10,0,20,.35)'; ctx.beginPath();
-    ctx.ellipse(this.x - cam, GROUND_Y + 2, 34 * (1 - (GROUND_Y - this.y) / 600), 7, 0, 0, 7); ctx.fill();
+    const sg = this.w.terrain.groundBelow(this.x, this.y, 12);
+    if (sg < Infinity) ctx.ellipse(this.x - cam, sg + 2, 34 * Math.max(0.3, 1 - (sg - this.y) / 600), 7, 0, 0, 7);
+    ctx.fill();
     // 回避の残像
     for (const g of this.ghosts) {
       ctx.globalAlpha = 0.4 * (1 - g.t / 0.3);
@@ -370,10 +392,14 @@ class Enemy {
     }
     // physics
     const grav = (d.fly && !this.launched) ? 0 : 1900;
+    const T = W.terrain, prevX = this.x, prevY = this.y;
     this.vy += grav * dt; this.x += this.vx * dt; this.y += this.vy * dt;
-    const floor = d.fly && !this.launched ? GROUND_Y - 20 : GROUND_Y;
+    if (!d.fly) this.x = T.blockX(this.x, prevX, this.y - d.h, this.y - 4, d.w / 2);
+    const gnd = T.groundBelow(this.x, prevY, 0);
+    const floor = d.fly && !this.launched ? Math.min(gnd, GROUND_Y) - 20 : gnd;
+    if (this.y > VIEW_H + 120 && !d.boss) { this.dead = true; return; }  // 穴に落ちた敵は消える
     if (this.y >= floor) {
-      if (this.launched && this.vy > 380) { this.vy = -this.vy * 0.35; W.dust(this.x, GROUND_Y, 5); Audio2.sfx('kick'); }
+      if (this.launched && this.vy > 380) { this.vy = -this.vy * 0.35; W.dust(this.x, floor, 5); Audio2.sfx('kick'); }
       else { this.y = floor; this.vy = 0; this.onGround = true; if (this.launched && d.fly) { this.launched = false; } else this.launched = false; }
     }
     if (d.fly && !this.launched && this.stun <= 0 && this.y < 60) this.y = 60;
@@ -399,7 +425,9 @@ class Enemy {
     const spawnA = this.spawnT > 0 ? 1 - this.spawnT / 0.4 : 1;
     // 影
     ctx.fillStyle = 'rgba(10,0,20,.3)'; ctx.beginPath();
-    ctx.ellipse(this.x - cam, GROUND_Y + 2, d.w * 0.55, 6, 0, 0, 7); ctx.fill();
+    const sg = this.w.terrain.groundBelow(this.x, this.y, 0);
+    if (sg < Infinity) ctx.ellipse(this.x - cam, sg + 2, d.w * 0.55, 6, 0, 0, 7);
+    ctx.fill();
     ctx.save();
     ctx.globalAlpha = this.alpha * spawnA * (this.dying > 0 ? this.dying / 0.45 : 1);
     if (this.dying > 0) { sx *= 1 + (0.45 - this.dying); sy *= 1 - (0.45 - this.dying) * 1.5; }

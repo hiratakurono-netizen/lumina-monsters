@@ -1,8 +1,10 @@
 // 1ステージ分のランタイム（カメラ・イベント・ウェーブ・戦闘処理）
 class World {
   constructor(chIdx, save, game) {
-    this.game = game; this.chIdx = chIdx; this.ch = CHAPTERS[chIdx];
+    // chIdx はプロローグの章番号。章データ（オブジェクト）を直接渡すこともできる（テスト部屋・本編のダンジョン用）
+    this.game = game; this.chIdx = typeof chIdx === 'number' ? chIdx : -1; this.ch = typeof chIdx === 'number' ? CHAPTERS[chIdx] : chIdx;
     this.bg = Backgrounds.get(this.ch.bg);
+    this.terrain = this.ch.terrain ? new Terrain(this.ch.terrain, { theme: this.ch.terrainTheme }) : Terrain.flat();
     this.camX = 0; this.camLock = null; this.shake = 0; this.hitstop = 0; this.flash = 0; this.slowmo = 0;
     this.enemies = []; this.projs = []; this.fx = []; this.fxTop = []; this.fxBack = []; this.pickups = [];
     this.player = new Player(this, save);
@@ -132,7 +134,8 @@ class World {
   spawn(type, side) {
     const d = ENEMIES[type];
     const x = side > 0 ? this.camX + VIEW_W + 20 : this.camX - 20;
-    const y = d.fly ? GROUND_Y - 180 - rand(0, 60) : GROUND_Y;
+    const gy = this.terrain.groundBelow(x, -1000, 0);
+    const y = d.fly ? GROUND_Y - 180 - rand(0, 60) : (gy < Infinity ? gy : GROUND_Y);
     const e = new Enemy(this, type, x, y);
     e.vx = -side * 120; this.enemies.push(e);
   }
@@ -264,6 +267,7 @@ class World {
     ctx.save(); ctx.translate(Math.round(sx), Math.round(sy));
     const cam = Math.round(this.camX);
     Backgrounds.draw(ctx, this.bg, cam);
+    this.terrain.draw(ctx, cam);
     this.drawProps(ctx, cam);
     this.drawItems(ctx, cam);
     for (const f of this.fxBack) f.draw(ctx, cam);
