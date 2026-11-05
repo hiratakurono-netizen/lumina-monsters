@@ -229,11 +229,13 @@ const Game = {
   titleItems() {
     const it = [{ k: 'new', t: 'はじめから' }];
     if (this.save.unlocked > 0) it.push({ k: 'select', t: 'ステージセレクト' });
+    it.push({ k: 'options', t: 'オプション' });
     it.push({ k: 'help', t: 'あそびかた' });
     return it;
   },
   u_title(dt) {
     const tap = this.takeTap();
+    if (this.sub === 'options') { if (this.updateOptions(tap)) this.sub = null; return; }
     if (this.sub === 'help') { if (tap || Input.confirm() || Input.hit('pause') || Input.hit('kick')) { this.sub = null; Audio2.sfx('select'); } return; }
     if (this.sub === 'select') {
       const n = this.save.unlocked + 1;
@@ -264,6 +266,7 @@ const Game = {
       if (k === 'new') { this.save.lv = 1; this.save.exp = 0; this.transition(() => this.startChapter(0)); }
       if (k === 'select') { this.sub = 'select'; this.selIdx = this.save.unlocked; }
       if (k === 'help') this.sub = 'help';
+      if (k === 'options') { this.sub = 'options'; this.optIdx = 0; }
     }
   },
   d_title() {
@@ -301,6 +304,7 @@ const Game = {
     ctx.fillText(IS_TOUCH ? 'タップで選択' : '↑↓ 選択　Z / Enter 決定　M ミュート', 70, VIEW_H - 30);
     if (this.sub === 'help') this.drawHelp();
     if (this.sub === 'select') this.drawSelect();
+    if (this.sub === 'options') this.drawOptions();
   },
   drawHelp() {
     panel(ctx, 120, 60, 720, 420, 'rgba(16,10,32,.96)', '#b9a2ff');
@@ -354,6 +358,7 @@ const Game = {
     const W = this.world;
     const tap = this.takeTap();
     if (tap && W.dialogue && !this.paused) Input.tap();
+    if (this.paused && this.pauseOpt) { if (this.updateOptions(tap)) this.pauseOpt = false; return; }
     if (this.paused) {
       if (tap) { const i = Math.floor((tap.y - 240) / 40); if (i >= 0 && i < 3) { this.pauseIdx = i; Input.tap(); } }
       if (Input.hit('up') || Input.hit('left')) { this.pauseIdx = (this.pauseIdx + 2) % 3; Audio2.sfx('blip'); }
@@ -361,7 +366,7 @@ const Game = {
       if (Input.hit('pause')) this.paused = false;
       else if (Input.confirm()) {
         if (this.pauseIdx === 0) this.paused = false;
-        else if (this.pauseIdx === 1) { Audio2.toggleMute(); Audio2.sfx('select'); }
+        else if (this.pauseIdx === 1) { this.pauseOpt = true; this.optIdx = 0; Audio2.sfx('select'); }
         else { this.paused = false; this.transition(() => { this.scene = 'title'; this.menu = 0; Audio2.playBgm('sorrow'); }); }
       }
       return;
@@ -379,9 +384,64 @@ const Game = {
     if (this.paused) {
       ctx.fillStyle = 'rgba(8,4,16,.7)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       ctx.textAlign = 'center'; ctx.font = `32px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText('PAUSE', VIEW_W / 2, 210);
-      ['つづける', Audio2.muted ? 'サウンド：OFF' : 'サウンド：ON', 'タイトルへ'].forEach((t, i) => { ctx.font = `20px ${FONT}`; ctx.fillStyle = i === this.pauseIdx ? '#ffe9a8' : '#bfb3e0'; ctx.fillText((i === this.pauseIdx ? '▶ ' : '') + t, VIEW_W / 2, 270 + i * 40); });
+      ['つづける', 'オプション', 'タイトルへ'].forEach((t, i) => { ctx.font = `20px ${FONT}`; ctx.fillStyle = i === this.pauseIdx ? '#ffe9a8' : '#bfb3e0'; ctx.fillText((i === this.pauseIdx ? '▶ ' : '') + t, VIEW_W / 2, 270 + i * 40); });
       ctx.textAlign = 'left';
+      if (this.pauseOpt) this.drawOptions();
     }
+  },
+  // ---------- options（タイトルとポーズの両方から開く） ----------
+  // 行: 0=BGM, 1=効果音, 2=もどる。←→で音量（10段階）、タップは ◀ ▶ かバーの位置
+  OPT: { x: 240, y: 130, w: 480, h: 280, rows: [210, 280, 360], barX: 420, barW: 200 },
+  updateOptions(tap) {
+    const O = this.OPT;
+    const get = i => (i === 0 ? Audio2.bgmVol : Audio2.sfxVol);
+    const set = (i, v) => { if (i === 0) Audio2.setBgm(v); else { Audio2.setSfx(v); Audio2.sfx('hit'); } };
+    if (Input.hit('up')) { this.optIdx = (this.optIdx + 2) % 3; Audio2.sfx('blip'); }
+    if (Input.hit('down')) { this.optIdx = (this.optIdx + 1) % 3; Audio2.sfx('blip'); }
+    if (this.optIdx < 2) {
+      if (Input.hit('left')) set(this.optIdx, get(this.optIdx) - 0.1);
+      if (Input.hit('right')) set(this.optIdx, get(this.optIdx) + 0.1);
+    }
+    if (tap) {
+      if (tap.x < O.x || tap.x > O.x + O.w || tap.y < O.y || tap.y > O.y + O.h) { Audio2.sfx('select'); return true; }
+      const i = O.rows.findIndex(y => Math.abs(tap.y - y) < 28);
+      if (i === 2) { Audio2.sfx('select'); return true; }
+      if (i >= 0) {
+        this.optIdx = i;
+        if (tap.x < O.barX - 4) set(i, get(i) - 0.1);
+        else if (tap.x > O.barX + O.barW + 4) set(i, get(i) + 0.1);
+        else set(i, Math.ceil((tap.x - O.barX) / O.barW * 10) / 10);
+      }
+    }
+    if (Input.hit('pause') || Input.hit('kick') || (Input.confirm() && this.optIdx === 2)) { Audio2.sfx('select'); return true; }
+    return false;
+  },
+  drawOptions() {
+    const O = this.OPT;
+    ctx.fillStyle = 'rgba(8,4,16,.6)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    panel(ctx, O.x, O.y, O.w, O.h, 'rgba(16,10,32,.97)', '#b9a2ff');
+    ctx.font = `22px ${FONT}`; ctx.fillStyle = '#ffe9a8'; ctx.textAlign = 'center';
+    ctx.fillText('オプション', O.x + O.w / 2, O.y + 40);
+    [['BGM', Audio2.bgmVol], ['効果音', Audio2.sfxVol]].forEach(([label, v], i) => {
+      const y = O.rows[i], on = this.optIdx === i;
+      ctx.textAlign = 'left'; ctx.font = `19px ${FONT}`; ctx.fillStyle = on ? '#ffe9a8' : '#e0d6ff';
+      ctx.fillText((on ? '▶ ' : '　') + label, O.x + 30, y + 7);
+      ctx.fillStyle = on ? '#ffe9a8' : '#9d90c8'; ctx.textAlign = 'center';
+      ctx.fillText('◀', O.barX - 22, y + 7); ctx.fillText('▶', O.barX + O.barW + 22, y + 7);
+      for (let k = 0; k < 10; k++) {
+        const filled = k < Math.round(v * 10);
+        ctx.fillStyle = filled ? (on ? '#ffe27a' : '#b9a2ff') : '#2a2444';
+        ctx.fillRect(O.barX + k * (O.barW / 10) + 2, y - 10, O.barW / 10 - 4, 20);
+      }
+      ctx.font = `14px ${FONT}`; ctx.fillStyle = '#cfc3ea'; ctx.textAlign = 'left';
+      ctx.fillText(String(Math.round(v * 10)), O.barX + O.barW + 44, y + 6);
+    });
+    const on = this.optIdx === 2;
+    ctx.font = `19px ${FONT}`; ctx.fillStyle = on ? '#ffe9a8' : '#e0d6ff'; ctx.textAlign = 'center';
+    ctx.fillText((on ? '▶ ' : '') + 'もどる', O.x + O.w / 2, O.rows[2] + 7);
+    ctx.font = `12px ${FONT}`; ctx.fillStyle = '#8c80b0';
+    ctx.fillText(IS_TOUCH ? '◀ ▶ かバーをタップで調整' : '↑↓ 選択　←→ 音量', O.x + O.w / 2, O.y + O.h - 14);
+    ctx.textAlign = 'left';
   },
   drawStoryOverlay(W) {
     // 三つの世界の図（STAGE 5）

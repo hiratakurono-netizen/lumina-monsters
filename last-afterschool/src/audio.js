@@ -2,15 +2,28 @@
 const Audio2 = (() => {
   let ctx = null, master = null, muted = false;
   let bgmKey = null;
-  const BGM_VOL = 0.4;
+  // 音量（0〜1）。オプションで変更でき、ブラウザに保存する
+  const VOL_KEY = 'last-afterschool-audio-v1';
+  const vol = { bgm: 0.5, sfx: 0.8 };
+  try { Object.assign(vol, JSON.parse(localStorage.getItem(VOL_KEY)) || {}); } catch (e) {}
+  const SFX_BOOST = 1.5;  // 効果音の基準の大きさ（音量 0.8 で従来の約2.4倍）
+  const bgmTarget = () => (muted ? 0 : vol.bgm);
+  const sfxGain = () => (muted ? 0 : vol.sfx * SFX_BOOST);
 
   function init() {
     if (ctx) return;
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
-      master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+      // 音を大きくしても割れないよう、コンプレッサーを通して出力する
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -12; comp.knee.value = 10; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.15;
+      master = ctx.createGain(); master.gain.value = sfxGain();
+      master.connect(comp); comp.connect(ctx.destination);
     } catch (e) { ctx = null; }
   }
+  function saveVol() { try { localStorage.setItem(VOL_KEY, JSON.stringify(vol)); } catch (e) {} }
+  function setBgm(v) { vol.bgm = Math.max(0, Math.min(1, Math.round(v * 10) / 10)); fadeId++; try { el.volume = bgmTarget(); } catch (e) {} saveVol(); }
+  function setSfx(v) { vol.sfx = Math.max(0, Math.min(1, Math.round(v * 10) / 10)); if (master) master.gain.value = sfxGain(); saveVol(); }
   function resume() { init(); if (ctx && ctx.state === 'suspended') ctx.resume(); }
 
   // iOS対策：BGM用の <audio> は1つだけ作り、最初のタップ中に再生を許可させてから src を差し替えて使い回す
@@ -36,18 +49,18 @@ const Audio2 = (() => {
       el.src = (window.ASSET_MAP && window.ASSET_MAP[src]) || src; el.currentTime = 0;
       const p = el.play();
       if (p && p.catch) p.then(() => { pending = false; }).catch(() => { pending = true; });
-      fadeTo(muted ? 0 : BGM_VOL, 700);
+      fadeTo(bgmTarget(), 700);
     });
   }
   // ユーザー操作（タップ/キー）のハンドラ内から同期的に呼ぶ
   function unlock() {
     resume();
-    if (pending && el.src) { el.play().then(() => { pending = false; fadeTo(muted ? 0 : BGM_VOL, 500); }).catch(() => {}); }
+    if (pending && el.src) { el.play().then(() => { pending = false; fadeTo(bgmTarget(), 500); }).catch(() => {}); }
   }
   function toggleMute() {
     muted = !muted;
     el.muted = muted;
-    if (master) master.gain.value = muted ? 0 : 0.5;
+    if (master) master.gain.value = sfxGain();
     return muted;
   }
 
@@ -98,5 +111,5 @@ const Audio2 = (() => {
   };
   function sfx(name) { if (!ctx || muted) return; try { SFX[name] && SFX[name](); } catch (e) {} }
 
-  return { init, resume, unlock, playBgm, sfx, toggleMute, get muted() { return muted; } };
+  return { init, resume, unlock, playBgm, setBgm, setSfx, get bgmVol() { return vol.bgm; }, get sfxVol() { return vol.sfx; }, sfx, toggleMute, get muted() { return muted; } };
 })();

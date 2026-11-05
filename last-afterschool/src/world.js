@@ -144,7 +144,8 @@ class World {
     const box = P.face > 0 ? [P.x + b[0], P.y + b[1], P.x + b[2], P.y + b[3]] : [P.x - b[2], P.y + b[1], P.x - b[0], P.y + b[3]];
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2, r = Math.max(40, (box[2] - box[0]) * 0.45);
     if (el !== 'none' && atk.key !== 'kick') this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
-    if (h.burst) {
+    // 必殺中は、その技の最後の一撃で爆発エフェクトを出す（机以外でも派手に）
+    if (h.burst || (atk.special && h === def.hits[def.hits.length - 1])) {
       this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el)); this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);
       Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 14);
       if (el === 'fire') for (let i = 0; i < 24; i++) this.spark(P.x + P.face * rand(20, 220), GROUND_Y - rand(0, 30), '#ff9a3a', 1, -rand(100, 400));
@@ -189,7 +190,9 @@ class World {
     }
   }
   doSpecial(P) {
-    P.startAttack('desk', { special: true, chainNext: 'desk2' });
+    // 今持っている武器で出す（机の時だけ2段目まで続ける）。武器がなければキック
+    const key = P.weapon || 'kick';
+    P.startAttack(key, { special: true, chainNext: key === 'desk' ? 'desk2' : null });
     P.inv = 1.6; P.setFace('fluster', 1.6);
     this.partner.glow = 1.2; this.flash = 0.35; this.hitstop = 0.12;
     this.floatText(P.x, P.y - 170, 'フルスイング！！', '#ffe27a', 26);
