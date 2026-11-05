@@ -17,6 +17,7 @@ class World {
     this.endTriggered = false;
     // ダンジョン：生成された敵と宝箱を置く（敵は主人公が近づくまで眠っている）
     this.chests = (this.ch.chests || []).map(c => Object.assign({ opened: false, t: 0 }, c));
+    this.objs = (this.ch.objs || []).map(o => Object.assign({ t: 0, hp: 1, cd: 0 }, o));   // 環境オブジェクト（たき火・草むら・キノコ）
     for (const sp of this.ch.spawns || []) { const e = this.makeEnemy(sp.type, sp.x, sp.y, sp); e.awake = false; e.spawnT = 0; this.enemies.push(e); }
   }
 
@@ -67,6 +68,7 @@ class World {
     this.projs = this.projs.filter(p => !p.dead);
     this.updatePickups(dt);
     if (this.ch.dungeon) this.updateDungeon(dt);
+    if (this.objs.length) this.updateObjs(dt);
     this.updateWave(dt);
     this.updateFx(dt);
 
@@ -185,6 +187,7 @@ class World {
     else if (h.slam) { // 通常の机の叩きつけ：揺れ・音・砂ぼこりだけ
       this.shake = Math.max(this.shake, h.shake || 10); Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 10);
     }
+    if (this.objs && this.objs.length) this.hitObjs(box);
     let any = false;
     const lvMul = 1 + (P.lv - 1) * 0.08, spMul = atk.special ? SPECIAL.dmgMul : 1;
     for (const e of this.enemies) {
@@ -205,7 +208,8 @@ class World {
       if (crit) this.floatText(e.x, e.y - e.d.h - 34, 'CRITICAL!', '#ffe27a', 14);
       if (e.boss) {
         e.poise += dmg;
-        if (e.poise > 170 && (e.state === 'move' || e.state === 'recover')) { e.poise = 0; e.state = 'stagger'; e.st = 1.1; e.vx = P.face * 160; this.floatText(e.x, e.y - 230, 'BREAK!', '#9fe0ff', 24); }
+        if (e.poise > 170 && (e.state === 'move' || e.state === 'recover')) { e.poise = 0; e.state = 'stagger'; e.st = 1.1; e.vx = P.face * 160; this.floatText(e.x, e.y - 230, 'BREAK!', '#9fe0ff', 24); if (e.moss > 0) this.stripMoss(e, 0.35); }
+        if (e.moss > 0 && el === 'fire') this.stripMoss(e, atk.special ? 0.3 : 0.1);   // 炎で苔が焼ける
       } else {
         e.vx = (Math.sign(e.x - P.x) || P.face) * (h.kb || 150) * (atk.special ? 1.4 : 1); // 主人公から離れる向きに飛ばす
         if (h.launch) { e.vy = -h.launch; e.launched = true; e.onGround = false; }
@@ -294,6 +298,64 @@ class World {
   dropGold(x, y, total) {
     const n = Math.min(5, 1 + Math.floor(total / 12));
     for (let i = 0; i < n; i++) this.pickups.push({ kind: 'gold', v: Math.max(1, Math.round(total / n)), x, y, vx: rand(-140, 140), vy: rand(-420, -220), t: 0 });
+  }
+  stripMoss(e, n) {
+    e.moss = Math.max(0, e.moss - n);
+    this.spark(e.x, e.y - e.d.h * 0.6, '#7fe08a', 10);
+    if (e.moss <= 0) { this.floatText(e.x, e.y - e.d.h - 40, '苔の鎧がはがれた！', '#8fe0a0', 22); Audio2.sfx('lvup'); this.shake = 10; }
+  }
+  // ---- 環境オブジェクト ----
+  updateObjs(dt) {
+    const P = this.player;
+    for (const o of this.objs) {
+      o.t += dt; o.cd -= dt;
+      if (o.dead) continue;
+      const near = Math.abs(P.x - o.x) < 36 && Math.abs(P.y - o.y) < 60;
+      if (o.kind === 'campfire' && near && o.cd <= 0 && this.state === 'play') {
+        o.cd = 1; const fresh = !(P.tempElT > 0 && P.tempEl === 'fire');
+        P.tempEl = 'fire'; P.tempElT = 30;
+        if (fresh) { Audio2.sfx('fire'); Audio2.sfx('transform'); this.floatText(P.x, P.y - 160, '武器に炎が宿った！（30秒）', '#ffb35a', 16); this.spark(P.x, P.y - 60, '#ff9a3a', 18); }
+      }
+      if (o.kind === 'mushroom' && P.onGround && Math.abs(P.x - o.x) < 30 && Math.abs(P.y - o.y) < 3 && this.state === 'play') {
+        P.vy = -1100; P.onGround = false; P.jumps = 1; o.squash = 0.25; Audio2.sfx('jump'); this.dust(o.x, o.y, 4, '#ffb0c8');
+      }
+      if (o.squash > 0) o.squash -= dt;
+      if (o.kind === 'campfire' && Math.random() < 0.5) this.fx.push(new Particle({ x: o.x + rand(-10, 10), y: o.y - 18, vx: rand(-15, 15), vy: rand(-90, -40), life: 0.6, size: 3, color: Math.random() < 0.5 ? '#ffb35a' : '#ff6a2a', add: true }));
+    }
+  }
+  // 攻撃で草むらを壊す
+  hitObjs(box) {
+    for (const o of this.objs) {
+      if (o.dead || o.kind !== 'bush') continue;
+      if (!overlap(box, [o.x - 26, o.y - 40, o.x + 26, o.y])) continue;
+      o.dead = true; Audio2.sfx('kick'); this.dust(o.x, o.y - 10, 10, '#6fa06a');
+      if (Math.random() < 0.3) this.pickups.push({ kind: 'milk', x: o.x, y: o.y - 30, vy: -300, t: 0 });
+      else this.dropGold(o.x, o.y - 30, 2 + Math.round((this.ch.floor || 1) * 1.5));
+    }
+  }
+  drawObjs(ctx, cam) {
+    for (const o of this.objs) {
+      const x = Math.round(o.x - cam), y = o.y; if (o.dead || x < -60 || x > VIEW_W + 60) continue;
+      const R = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(x + a, y + b, w, h); };
+      if (o.kind === 'campfire') {
+        R('#5a3a2a', -20, -8, 40, 8); R('#7a4a2a', -16, -12, 32, 5);
+        const f = Math.sin(o.t * 14) * 3;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, y - 20, 2, x, y - 20, 70); g.addColorStop(0, 'rgba(255,170,80,.55)'); g.addColorStop(1, 'rgba(255,90,30,0)'); ctx.fillStyle = g; ctx.fillRect(x - 70, y - 90, 140, 100);
+        ctx.restore();
+        ctx.fillStyle = '#ff6a2a'; ctx.beginPath(); ctx.moveTo(x - 14, y - 10); ctx.quadraticCurveTo(x, y - 52 - f, x + 14, y - 10); ctx.fill();
+        ctx.fillStyle = '#ffd36a'; ctx.beginPath(); ctx.moveTo(x - 7, y - 10); ctx.quadraticCurveTo(x, y - 34 + f, x + 7, y - 10); ctx.fill();
+        if (Math.abs(this.player.x - o.x) < 160 && !(this.player.tempElT > 0)) { ctx.font = `12px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd6a0'; ctx.fillText('ふれると炎', x, y - 64); ctx.textAlign = 'left'; }
+      } else if (o.kind === 'bush') {
+        ctx.fillStyle = '#4f7f52'; for (const [a, b, r] of [[-14, -14, 16], [12, -14, 15], [0, -24, 16]]) { ctx.beginPath(); ctx.arc(x + a, y + b, r, 0, 7); ctx.fill(); }
+        ctx.fillStyle = '#6fa06a'; for (const [a, b] of [[-10, -22], [8, -26], [16, -12]]) R('#8fca7a', a, b, 4, 4);
+      } else if (o.kind === 'mushroom') {
+        const sq = o.squash > 0 ? 0.7 : 1;
+        R('#f2e6d8', -6, -18 * sq, 12, 18 * sq);
+        ctx.fillStyle = '#e05a8a'; ctx.beginPath(); ctx.ellipse(x, y - 18 * sq, 26, 14 * sq, 0, Math.PI, 0); ctx.fill();
+        R('#fff', -14, -26 * sq, 6, 5); R('#fff', 6, -28 * sq, 5, 4);
+      }
+    }
   }
   dropItem(x, y, item) { this.pickups.push({ kind: 'item', item, x, y, vx: rand(-90, 90), vy: -420, t: 0 }); }
   // 装備を拾う：すぐ持ち物に入れて保存する。持ち物がいっぱいの時は地面に残す
@@ -386,6 +448,7 @@ class World {
     const cam = Math.round(this.camX);
     Backgrounds.draw(ctx, this.bg, cam);
     this.terrain.draw(ctx, cam);
+    if (this.objs && this.objs.length) this.drawObjs(ctx, cam);
     if (this.ch.town) Town.drawFacilities(ctx, cam, this);
     this.drawProps(ctx, cam);
     this.drawItems(ctx, cam);

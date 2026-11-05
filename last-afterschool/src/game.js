@@ -118,6 +118,7 @@ function drawHud(ctx, W) {
   ctx.font = `11px ${FONT}`; ctx.fillStyle = '#b9aee0';
   if (P.item) ctx.fillStyle = P.item.rarity.color;
   ctx.fillText(P.item ? P.item.name : P.weapon ? WEAPONS[P.weapon].name : (P.canFight ? '素手（キック）' : ''), 304, 84);
+  if (P.tempElT > 0) { const E = ELEMENTS[P.tempEl]; ctx.font = `12px ${FONT}`; ctx.fillStyle = E.color; ctx.fillText(`${E.name}属性 ${Math.ceil(P.tempElT)}秒`, 304, 98); }
   if (W.ch.dungeon) { ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffe27a'; const g = `所持金 ${Game.save.gold} G` + (Game.run ? `（今回 +${Game.run.gained}）` : ''); ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4; ctx.strokeText(g, 20, IS_TOUCH ? 152 : 128); ctx.fillText(g, 20, IS_TOUCH ? 152 : 128); }
   // 下部
   ctx.font = `18px ${FONT}`; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1a0f2a'; ctx.lineWidth = 4;

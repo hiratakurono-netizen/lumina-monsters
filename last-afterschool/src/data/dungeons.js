@@ -29,18 +29,20 @@ const DUNGEONS = {
     chunks: {
       start: { w: 520, solids: [G0(0, 520)], foes: [], chests: [] },
       exit:  { w: 640, solids: [G0(0, 640)], foes: [], chests: [], exitX: 420 },
-      flat:  { w: 720, weight: 3, solids: [G0(0, 720)], foes: [{ x: 260 }, { x: 520 }, { x: 400, y: 300, fly: true }], chests: [] },
+      flat:  { w: 720, weight: 3, solids: [G0(0, 720)], foes: [{ x: 260 }, { x: 520 }, { x: 400, y: 300, fly: true }], chests: [], objs: [{ x: 120, kind: 'bush', p: 0.6 }, { x: 640, kind: 'bush', p: 0.5 }, { x: 380, kind: 'campfire', p: 0.18 }] },
       step:  { w: 820, weight: 3, solids: [G0(0, 820), BL(300, 408, 160, 60), OW(520, 340, 160)], foes: [{ x: 150 }, { x: 680 }, { x: 600, y: 340 }], chests: [{ x: 600, y: 340 }] },
       pit:   { w: 760, weight: 2, solids: [G0(0, 260), OW(300, 380, 120), G0(460, 300)], foes: [{ x: 620 }, { x: 360, y: 260, fly: true }], chests: [] },
       gap:   { w: 620, weight: 2, solids: [G0(0, 230), G0(350, 270)], foes: [{ x: 480 }], chests: [] },
-      hill:  { w: 920, weight: 2, solids: [G0(0, 920), BL(250, 388, 400, 80), OW(380, 288, 140)], foes: [{ x: 120 }, { x: 800 }, { x: 450, y: 388 }], chests: [{ x: 450, y: 288 }] },
+      hill:  { w: 920, weight: 2, solids: [G0(0, 920), BL(250, 388, 400, 80), OW(380, 288, 140)], foes: [{ x: 120 }, { x: 800 }, { x: 450, y: 388 }], chests: [{ x: 450, y: 288 }], objs: [{ x: 300, y: 388, kind: 'bush', p: 0.6 }, { x: 860, kind: 'campfire', p: 0.25 }] },
       ledges:{ w: 840, weight: 2, solids: [G0(0, 840), OW(150, 360, 140), OW(380, 280, 140), OW(610, 360, 140)], foes: [{ x: 300 }, { x: 720 }, { x: 450, y: 200, fly: true }], chests: [{ x: 450, y: 280 }] },
       // 寄り道：高い所の宝箱（足場から2段ジャンプで届く）。中身は良いもの
       hidden:{ w: 900, weight: 1, solids: [G0(0, 900), OW(480, 340, 130), OW(680, 220, 130)], foes: [{ x: 200 }, { x: 820 }], chests: [{ x: 745, y: 220, hidden: true }] },
       // 戦闘部屋：入るとカメラが止まり、敵が湧く
+      // キノコのばね：高い足場の宝箱へ（キノコで跳ばないと届かない寄り道）
+      spring:{ w: 760, weight: 2, solids: [G0(0, 760), OW(420, 170, 150)], foes: [{ x: 160 }, { x: 640 }], chests: [{ x: 495, y: 170, hidden: true, viaSpring: true }], objs: [{ x: 330, kind: 'mushroom', p: 1 }, { x: 80, kind: 'bush', p: 0.6 }] },
       arena: { w: 980, weight: 2, solids: [G0(0, 980), OW(160, 360, 160), OW(660, 360, 160)], foes: [], chests: [], wave: true },
       // ボス部屋（5階・10階）
-      boss:  { w: 1300, solids: [G0(0, 1300), OW(180, 340, 180), OW(940, 340, 180)], foes: [], chests: [], boss: true },
+      boss:  { w: 1300, solids: [G0(0, 1300), OW(180, 340, 180), OW(940, 340, 180)], foes: [], chests: [], boss: true, objs: [{ x: 120, kind: 'campfire', p: 1, bossOnly: 10 }] },
     },
     // 5階：中ボス、10階：ボス（専用の行動は第6段階で作る。今は既存の行動の流用：仮）
     bosses: { 5: 'wolf_boss', 10: 'golem_moss' },
@@ -52,5 +54,6 @@ Object.assign(ENEMIES, {
   sprout:    { spr: 'sprout', scale: 0.9, hp: 26, dmg: 6, speed: 80, ai: 'hop', w: 50, h: 56, exp: 5 },
   wolf:      { spr: 'wolf', scale: 0.85, hp: 44, dmg: 10, speed: 150, ai: 'lunge', w: 70, h: 70, exp: 10 },
   wolf_boss: { spr: 'wolf_l', scale: 1.05, hp: 520, dmg: 12, speed: 170, ai: 'wolfBoss', w: 140, h: 140, exp: 80, boss: true, name: '草原の主 オオカミ（仮）' },
-  golem_moss:{ spr: 'golem', scale: 1.15, hp: 1200, dmg: 13, speed: 70, ai: 'golem', w: 170, h: 185, exp: 200, boss: true, name: '苔むした巨像（仮）' },
+  // 苔の鎧（moss）：ダメージ半減。炎の攻撃か BREAK ではがれる。ボス部屋の左端にたき火がある
+  golem_moss:{ spr: 'golem', scale: 1.15, hp: 1200, dmg: 13, speed: 70, ai: 'golemMoss', moss: true, w: 170, h: 185, exp: 200, boss: true, name: '苔むした巨像（仮）' },
 });

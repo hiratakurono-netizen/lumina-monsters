@@ -70,6 +70,7 @@ class Player {
   weightSpeed() { const w = this.weapon && WEAPONS[this.weapon]; return (w ? (WEIGHT_SPEED[w.size] || 1) : 1) * (this.stats ? 1 + this.stats.move / 100 : 1); }
   get element() {
     if (this.fire) return 'fire';
+    if (this.tempElT > 0 && !(this.atk && this.atk.key === 'kick')) return this.tempEl;   // たき火などで一時的に付いた属性
     if (this.wItems) return this.atk && this.atk.key === 'kick' ? 'none' : ((this.item && this.item.element) || 'none'); const w = this.atk ? WEAPONS[this.atk.key] : (this.weapon && WEAPONS[this.weapon]); return (w && w.element) || 'none'; }
   setFace(f, t = 1.2) { this.faceOverride = f; this.faceTimer = t; }
   get portrait() {
@@ -122,6 +123,7 @@ class Player {
   update(dt) {
     const W = this.w, I = Input;
     this.inv -= dt; this.hurtT -= dt; this.faceTimer -= dt; this.dodgeCD -= dt;
+    if (this.tempElT > 0) this.tempElT -= dt;
     this.ghosts.forEach(g => g.t += dt); this.ghosts = this.ghosts.filter(g => g.t < 0.3);
     const control = !this.locked && !W.dialogue && W.state === 'play';
     const guardHeld = control && !!I.held.guard && this.weapons.length > 0;
@@ -429,6 +431,7 @@ class Enemy {
   }
   damage(n, srcX, quiet) {
     if (this.dying > 0) return;
+    if (this.d.moss && this.moss > 0) n = Math.max(1, Math.round(n * 0.5));   // 苔の鎧：ダメージ半減
     this.hp -= n; this.flash = 0.08;
     if (!quiet) this.w.floatText(this.x + rand(-12, 12), this.y - this.d.h - 10, String(Math.round(n)), n >= 40 ? '#ffd36a' : '#ffffff', n >= 40 ? 22 : 16);
     if (this.hp <= 0) this.w.killEnemy(this);
@@ -466,6 +469,7 @@ class Enemy {
       ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha *= 0.7;
       drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot);
     }
+    if (d.moss && this.moss > 0) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.45 * this.moss; ctx.filter = 'hue-rotate(70deg) saturate(1.6)'; drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy, rot); ctx.filter = 'none'; }
     if (this.rage) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.18 + Math.sin(this.t * 8) * 0.08; drawMon(ctx, d.spr, this.x - cam + ox, this.y + oy, d.scale, this.face > 0, sx, sy); }
     ctx.restore();
     if (this.burn > 0 && Math.random() < 0.5) this.w.spark(this.x + rand(-d.w / 3, d.w / 3), this.y - rand(0, d.h), '#ff8a3a', 1, -80);
@@ -590,6 +594,19 @@ const AI = {
       default: e.state = 'move';
     }
   },
+  // 苔むした巨像：巨像の攻撃（叩きつけ・突進・岩）に加えて、足元からツタを生やす
+  golemMoss(e, dt, dir, dist, P, W) {
+    if (e.moss === undefined) e.moss = 1;
+    e.vineCD = (e.vineCD === undefined ? 4 : e.vineCD) - dt;
+    if (e.state === 'move' && e.vineCD <= 0) {
+      e.vineCD = e.rage ? 4.5 : 6.5; Audio2.sfx('warn');
+      const n = e.rage ? 3 : 2;
+      for (let i = 0; i < n; i++) W.addProj(new Vine(W, P.x + (i - (n - 1) / 2) * 110, 0.9 + i * 0.25));
+      e.state = 'recover'; e.st = 1.2; e.vx = 0;
+      return;
+    }
+    AI.golem(e, dt, dir, dist, P, W);
+  },
   golem(e, dt, dir, dist, P, W) {
     const rage = e.hp < e.maxHp * 0.5;
     if (rage && !e.rage) { e.rage = true; W.floatText(e.x, e.y - 220, '激昂！', '#ff6a6a', 26); Audio2.sfx('warn'); W.shake = 12; }
@@ -647,6 +664,22 @@ const AI = {
 // =====================================================================
 //  Projectiles
 // =====================================================================
+// ツタ：地面に予兆（緑の光）→ 0.4秒だけ地面から突き出す
+class Vine {
+  constructor(w, x, delay) { this.w = w; this.x = x; this.t = -delay; this.dead = false; this.hit = false; this.gy = w.terrain.groundBelow(x, 0, 0); if (this.gy === Infinity) this.dead = true; }
+  update(dt) {
+    this.t += dt; if (this.t > 0.45) this.dead = true;
+    if (this.t >= 0 && !this.hit && overlap([this.x - 26, this.gy - 120, this.x + 26, this.gy], this.w.player.box())) { if (this.w.player.hurt(11, this.x)) this.hit = true; }
+    if (this.t >= 0 && this.t < dt * 1.5) { this.w.dust(this.x, this.gy, 6, '#6fa06a'); this.w.shake = Math.max(this.w.shake, 4); Audio2.sfx('kick'); }
+  }
+  draw(ctx, cam) {
+    const x = this.x - cam;
+    if (this.t < 0) { const a = 0.3 + 0.3 * Math.sin(this.t * 30); ctx.fillStyle = `rgba(120,230,120,${a})`; ctx.fillRect(x - 30, this.gy - 6, 60, 6); return; }
+    const h = 120 * Math.min(1, this.t / 0.08) * (this.t > 0.3 ? 1 - (this.t - 0.3) / 0.15 : 1);
+    ctx.fillStyle = '#3e6b48'; ctx.beginPath(); ctx.moveTo(x - 22, this.gy); ctx.lineTo(x - 4, this.gy - h); ctx.lineTo(x + 6, this.gy - h * 0.7); ctx.lineTo(x + 22, this.gy); ctx.fill();
+    ctx.fillStyle = '#7fb069'; ctx.fillRect(x - 3, this.gy - h, 5, h * 0.9);
+  }
+}
 class Spore {
   constructor(w, x, y, dir) { this.w = w; this.x = x; this.y = y; this.vx = dir * 90; this.t = 0; this.dead = false; }
   update(dt) { this.t += dt; this.x += this.vx * dt; this.vx *= 0.98; if (this.t > 1.3) this.dead = true;

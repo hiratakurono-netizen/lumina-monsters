@@ -39,7 +39,7 @@ const DungeonGen = {
       bgm: isBoss ? D.bossBgm : D.bgm, terrainTheme: D.terrainTheme, jumpMul: D.jumpMul,
       loadout: { weapons: [], fire: false, partner: true, canFight: true },
       intro: [], events: [], endX: 99999, outro: [],
-      terrain: [], spawns: [], chests: [], exitX: 0, boss: null,
+      terrain: [], spawns: [], chests: [], objs: [], exitX: 0, boss: null,
     };
     const hpMul = 1 + 0.14 * (floor - 1), dmgMul = 1 + 0.07 * (floor - 1);   // 深い階ほど強い（行動の変化は第6段階で追加）
     const foes = D.foes(floor);
@@ -59,7 +59,11 @@ const DungeonGen = {
         ch.spawns.push({ type, x: sp.x + x, y: sp.y, hpMul, dmgMul });
       }
       // 宝箱：候補ごとに一定の確率（寄り道の宝箱は必ず）
-      for (const cs of c.chests) if (cs.hidden || rng.chance(0.55)) ch.chests.push({ x: cs.x + x, y: cs.y, hidden: !!cs.hidden, floor });
+      for (const cs of c.chests) if (cs.hidden || rng.chance(0.55)) ch.chests.push({ x: cs.x + x, y: cs.y, hidden: !!cs.hidden, viaSpring: !!cs.viaSpring, floor });
+      for (const o of c.objs || []) {
+        if (o.bossOnly && o.bossOnly !== floor) continue;
+        if (rng.chance(o.p)) ch.objs.push({ x: o.x + x, y: o.y || GROUND_Y, kind: o.kind });
+      }
       if (c.wave) ch.events.push({ x: x + 200, type: 'wave', waves: [this.waveList(rng, foes, floor), this.waveList(rng, foes, floor)], hpMul, dmgMul });
       if (c.boss) ch.boss = { type: D.bosses[floor], x: x + c.w - 300, hpMul: 1 + 0.05 * (floor - 1) };
       if (c.exitX) ch.exitX = x + c.exitX;
@@ -91,7 +95,8 @@ const DungeonGen = {
       });
     }
     // 宝箱も取れる位置にあるか（届かない宝箱は消す）
-    ch.chests = ch.chests.filter(c => { const i = surf.findIndex(s => c.x >= s.x0 && c.x <= s.x1 && Math.abs(s.y - c.y) < 2); return i < 0 || seen.has(i); });
+    // キノコのばねで届く宝箱（viaSpring）は残す
+    ch.chests = ch.chests.filter(c => { if (c.viaSpring) return true; const i = surf.findIndex(s => c.x >= s.x0 && c.x <= s.x1 && Math.abs(s.y - c.y) < 2); return i < 0 || seen.has(i); });
     return seen.has(goal);
   },
 };
