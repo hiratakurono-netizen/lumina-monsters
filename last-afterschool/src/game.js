@@ -8,11 +8,7 @@ const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || (
 // =====================================================================
 //  Save
 // =====================================================================
-const Save = {
-  key: 'last-afterschool-save-v1',
-  load() { try { return JSON.parse(localStorage.getItem(this.key)) || { unlocked: 0, lv: 1, exp: 0 }; } catch (e) { return { unlocked: 0, lv: 1, exp: 0 }; } },
-  store(d) { try { localStorage.setItem(this.key, JSON.stringify(d)); } catch (e) {} },
-};
+// セーブは src/systems/save.js（v2・旧データは自動で移行）
 
 // =====================================================================
 //  Dialogue
@@ -185,6 +181,15 @@ const Game = {
     Save.store(this.save);
     this.transition(() => { if (next < CHAPTERS.length) this.startChapter(next); else { this.scene = 'end'; this.t = 0; Audio2.playBgm('sorrow'); } });
   },
+  // 現世の町へ（プロローグのあと／つづきから）。初回はスターター装備を渡す
+  enterTown() {
+    const s = this.save; s.flags = s.flags || {};
+    if (!s.main) { s.main = true; Inv.giveStarter(s); }
+    this.world = new World(Town.chapter(s), s, this);
+    s.flags.townIntro = true; Save.store(s);
+    this.card = { t: 0 }; this.scene = 'card'; this.fade = 1;
+    Audio2.playBgm(TOWN.bgm);
+  },
   gameOver(W) { this.scene = 'gameover'; this.t = 0; this.menu = 0; },
   transition(fn) { this.fadeOut = { t: 0, fn }; },
 
@@ -199,6 +204,7 @@ const Game = {
     }
     this.fade = Math.max(0, this.fade - dt * 1.6);
     const S = this['u_' + this.scene]; if (S) S.call(this, dt);
+    document.body.classList.toggle('town', (this.scene === 'play' || this.scene === 'card') && !!(this.world && this.world.ch.town));
     this.tapAt = null;
     Input.endFrame();
   },
@@ -227,7 +233,7 @@ const Game = {
 
   // ---------- title ----------
   titleItems() {
-    const it = [{ k: 'new', t: 'はじめから' }];
+    const it = this.save.main ? [{ k: 'continue', t: 'つづきから' }, { k: 'new', t: 'はじめから' }] : [{ k: 'new', t: 'はじめから' }];
     if (this.save.unlocked > 0) it.push({ k: 'select', t: 'ステージセレクト' });
     it.push({ k: 'options', t: 'オプション' });
     it.push({ k: 'help', t: 'あそびかた' });
@@ -236,6 +242,16 @@ const Game = {
   u_title(dt) {
     const tap = this.takeTap();
     if (this.sub === 'options') { if (this.updateOptions(tap)) this.sub = null; return; }
+    if (this.sub === 'confirmNew') {   // 本編のデータを消して最初からやり直す確認
+      if (tap) { const i = tap.y > 280 && tap.y < 320 ? 0 : tap.y >= 320 && tap.y < 360 ? 1 : -1; if (i >= 0) { this.confirmIdx = i; Input.tap(); } }
+      if (Input.hit('up') || Input.hit('down') || Input.hit('left') || Input.hit('right')) { this.confirmIdx ^= 1; Audio2.sfx('blip'); }
+      if (Input.hit('pause') || Input.hit('kick')) { this.sub = null; return; }
+      if (Input.confirm()) {
+        Audio2.sfx('select'); this.sub = null;
+        if (this.confirmIdx === 0) { this.save = Save.fresh(); Save.store(this.save); this.transition(() => this.startChapter(0)); }
+      }
+      return;
+    }
     if (this.sub === 'help') { if (tap || Input.confirm() || Input.hit('pause') || Input.hit('kick')) { this.sub = null; Audio2.sfx('select'); } return; }
     if (this.sub === 'select') {
       const n = this.save.unlocked + 1;
@@ -263,7 +279,9 @@ const Game = {
     if (Input.confirm()) {
       Audio2.sfx('select');
       const k = items[this.menu].k;
-      if (k === 'new') { this.save.lv = 1; this.save.exp = 0; this.transition(() => this.startChapter(0)); }
+      if (k === 'continue') this.transition(() => this.enterTown());
+      if (k === 'new' && this.save.main) { this.sub = 'confirmNew'; this.confirmIdx = 1; }
+      else if (k === 'new') { this.save.lv = 1; this.save.exp = 0; this.transition(() => this.startChapter(0)); }
       if (k === 'select') { this.sub = 'select'; this.selIdx = this.save.unlocked; }
       if (k === 'help') this.sub = 'help';
       if (k === 'options') { this.sub = 'options'; this.optIdx = 0; }
@@ -305,6 +323,15 @@ const Game = {
     if (this.sub === 'help') this.drawHelp();
     if (this.sub === 'select') this.drawSelect();
     if (this.sub === 'options') this.drawOptions();
+    if (this.sub === 'confirmNew') {
+      ctx.fillStyle = 'rgba(8,4,16,.6)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+      panel(ctx, 230, 190, 500, 200, 'rgba(16,10,32,.97)', '#ff8a9a');
+      ctx.textAlign = 'center'; ctx.font = `18px ${FONT}`; ctx.fillStyle = '#fff';
+      ctx.fillText('セーブデータを消して、最初から始めますか？', VIEW_W / 2, 240);
+      ctx.font = `13px ${FONT}`; ctx.fillStyle = '#ffb0bc'; ctx.fillText('装備・お金・進行はすべて消えます', VIEW_W / 2, 264);
+      ['はい（消して最初から）', 'いいえ'].forEach((t, i) => { ctx.font = `19px ${FONT}`; ctx.fillStyle = i === this.confirmIdx ? '#ffe9a8' : '#bfb3e0'; ctx.fillText((i === this.confirmIdx ? '▶ ' : '') + t, VIEW_W / 2, 306 + i * 40); });
+      ctx.textAlign = 'left';
+    }
   },
   drawHelp() {
     panel(ctx, 120, 60, 720, 420, 'rgba(16,10,32,.96)', '#b9a2ff');
@@ -356,6 +383,9 @@ const Game = {
   // ---------- play ----------
   u_play(dt) {
     const W = this.world;
+    if (UI.isOpen) { if (Input.hit('pause')) UI.close(); return; }   // 町のメニューを開いている間は止める
+    // 町：近くに施設がある時だけ「しらべる」ボタンを出す
+    const ib = document.querySelector('[data-btn="down"]'); if (ib) ib.hidden = !(W.ch.town && W.nearFac && !W.dialogue);
     const tap = this.takeTap();
     if (tap && W.dialogue && !this.paused) Input.tap();
     if (this.paused && this.pauseOpt) { if (this.updateOptions(tap)) this.pauseOpt = false; return; }
@@ -379,7 +409,8 @@ const Game = {
   d_play() {
     const W = this.world; W.draw(ctx);
     if (W.ch.storyOnly) this.drawStoryOverlay(W);
-    if (!W.ch.storyOnly) drawHud(ctx, W);
+    if (W.ch.town) Town.drawHud(ctx, W, this.save);
+    else if (!W.ch.storyOnly) drawHud(ctx, W);
     if (W.dialogue) W.dialogue.draw(ctx, W.player);
     if (this.paused) {
       ctx.fillStyle = 'rgba(8,4,16,.7)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -478,7 +509,7 @@ const Game = {
   },
 
   // ---------- end card ----------
-  u_end() { if (this.t > 3 && (Input.confirm() || this.takeTap())) this.transition(() => { this.scene = 'title'; this.menu = 0; }); },
+  u_end() { if (this.t > 3 && (Input.confirm() || this.takeTap())) this.transition(() => this.enterTown()); },  // プロローグのあとは町へ
   d_end() {
     const bg = Backgrounds.get('rooftop_calm'); Backgrounds.draw(ctx, bg, 0);
     ctx.fillStyle = `rgba(8,4,16,${Math.min(0.82, this.t * 0.3)})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H);

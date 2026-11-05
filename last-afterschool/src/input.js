@@ -64,7 +64,7 @@ const Input = (() => {
     document.addEventListener('touchmove', e => { if (e.touches.length > 1) stop(e); }, { passive: false });
     ['gesturestart', 'gesturechange', 'gestureend', 'dblclick'].forEach(t => document.addEventListener(t, stop, { passive: false }));
     let lastEnd = 0;
-    document.addEventListener('touchend', e => { const now = Date.now(); if (now - lastEnd < 350) stop(e); lastEnd = now; }, { passive: false });
+    document.addEventListener('touchend', e => { if (e.target.closest && e.target.closest('#ui')) return; const now = Date.now(); if (now - lastEnd < 350) stop(e); lastEnd = now; }, { passive: false });  // 町のメニューは連打できるよう対象外
   }
 
   // ---- gamepad ----

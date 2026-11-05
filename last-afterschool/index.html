@@ -56,6 +56,41 @@
   @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
   @media (prefers-reduced-motion: reduce) { #rotate .ph { animation: none; transform: rotate(-90deg); } }
   @media (orientation: portrait) { body.touch #rotate { display: flex; } }
+  /* ---- 町のメニュー（HTML で重ねる） ---- */
+  #ui { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    padding: max(8px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+  .ui-backdrop { position: absolute; top: 0; right: 0; bottom: 0; left: 0; background: rgba(6, 3, 12, .62); }
+  .ui-panel { position: relative; display: flex; flex-direction: column; width: 100%; max-width: 760px; max-height: 100%;
+    background: #160f2a; border: 2px solid #b9a2ff; box-shadow: 0 0 0 4px rgba(185, 162, 255, .12); color: var(--ink); font-family: 'DotGothic16', monospace; }
+  .ui-head { display: flex; flex-shrink: 0; align-items: center; gap: 10px; padding: 8px 8px 8px 16px; border-bottom: 1px solid #3b2d63; }
+  .ui-title { font-size: 20px; color: #ffe9a8; flex: 1; }
+  .ui-head-right { font-size: 15px; color: #ffe27a; }
+  .ui-close { min-width: 44px; min-height: 44px; font: inherit; font-size: 18px; color: var(--ink); background: #2a2140; border: 1px solid #5a4d86; border-radius: 8px; }
+  .ui-tabs { display: flex; flex-shrink: 0; gap: 4px; padding: 6px 8px 0; overflow-x: auto; }
+  .ui-tab { flex: 1; min-height: 40px; font: inherit; font-size: 15px; color: #cfc3ea; background: #1e1734; border: 1px solid #3b2d63; border-bottom: 0; border-radius: 8px 8px 0 0; white-space: nowrap; }
+  .ui-tab.on { color: #ffe9a8; background: #2c2150; border-color: #8f7fd0; }
+  .ui-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .ui-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-height: 48px; background: #1e1734; border: 1px solid #3b2d63; border-left: 5px solid var(--rc, #5a4d86); border-radius: 6px; }
+  .ui-row.sel { background: #2c2150; border-color: #8f7fd0; }
+  .ui-row .main { flex: 1; min-width: 0; }
+  .ui-row .name { font-size: 16px; color: var(--rc, #f0e8ff); }
+  .ui-row .sub { font-size: 12px; color: #b9aee0; margin-top: 2px; }
+  .ui-row .slot { width: 64px; font-size: 13px; color: #9d90c8; }
+  .ui-btn { min-width: 64px; min-height: 44px; padding: 0 12px; font: inherit; font-size: 15px; color: #160f2a; background: #ffe27a; border: 0; border-radius: 8px; }
+  .ui-btn.ghost { color: var(--ink); background: #2a2140; border: 1px solid #5a4d86; }
+  .ui-btn:disabled { opacity: .4; }
+  .ui-note { font-size: 13px; color: #b9aee0; line-height: 1.6; }
+  .ui-h { font-size: 14px; color: #ffe9a8; margin-top: 4px; }
+  .ui-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+  .ui-stat { padding: 8px 10px; background: #1e1734; border: 1px solid #3b2d63; border-radius: 6px; font-size: 14px; }
+  .ui-stat b { display: block; font-size: 18px; color: #ffe9a8; font-weight: normal; }
+  .up { color: #8fe0a0; } .down { color: #ff8a9a; }
+  .ui-text { width: 100%; min-height: 72px; font: 12px monospace; color: var(--ink); background: #0c0818; border: 1px solid #5a4d86; border-radius: 6px; padding: 6px; box-sizing: border-box; -webkit-user-select: text; user-select: text; }
+  .ui-toast { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); z-index: 20; padding: 10px 18px; background: #2c2150; color: #ffe9a8; border: 1px solid #b9a2ff; border-radius: 8px; font: 16px 'DotGothic16', monospace; }
+  body.ui-open #touch { display: none; }
+  /* 町では戦闘ボタンを隠し、近くに施設がある時だけ「しらべる」を出す */
+  body.town [data-btn="attack"], body.town [data-btn="kick"], body.town [data-btn="special"], body.town [data-btn="swap"], body.town [data-btn="guard"] { display: none; }
+  [data-btn="down"] { right: calc(20px + var(--b) * 1.1 + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: calc(var(--b) * 1.2); height: calc(var(--b) * 1.2); border-color: var(--gold); font-size: 15px; }
 </style>
 <div id="wrap"><canvas id="game" width="1920" height="1080"></canvas></div>
 <div id="touch" aria-hidden="true">
@@ -69,6 +104,7 @@
   <div class="btn" data-btn="special">必殺</div>
   <div class="btn sm" data-btn="swap">武器</div>
   <div class="btn sm" data-btn="pause">II</div>
+  <div class="btn" data-btn="down" hidden>しらべる</div>
 </div>
 <div id="rotate"><div class="ph"></div><div>スマホを横向きにしてね</div><div style="font-size:13px;opacity:.7">This game is played in landscape.</div></div>
 <script src="src/sprite_data.js"></script>
@@ -79,6 +115,13 @@
 <script src="src/systems/terrain.js"></script>
 <script src="src/entities.js"></script>
 <script src="src/world.js"></script>
+<script src="src/data/items.js"></script>
+<script src="src/systems/rng.js"></script>
+<script src="src/systems/save.js"></script>
+<script src="src/systems/inventory.js"></script>
+<script src="src/systems/stats.js"></script>
+<script src="src/ui/menu.js"></script>
+<script src="src/town/town.js"></script>
 <script src="src/game.js"></script>
 <script src="src/dev/test_rooms.js"></script>
 </body>

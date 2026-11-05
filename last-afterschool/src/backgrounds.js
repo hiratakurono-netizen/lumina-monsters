@@ -189,6 +189,32 @@ const Backgrounds = (() => {
     return { sky: s, layers: [{ img: far, f: 0.1, y: 50 }, { img: m, f: 0.7, y: 0 }], floor, ambient: calm ? 'mote' : 'ember' };
   }
 
+
+  // 現世の町（夕方の商店街）。施設の建物は town.js 側で描く
+  function town() {
+    const s = sky([[0, '#4b3a78'], [0.5, '#c27a8e'], [1, '#f2b48a']], x => {
+      x.fillStyle = 'rgba(255,214,160,.65)'; x.beginPath(); x.arc(640, 330, 60, 0, 7); x.fill();
+      crack(x, 300, 80, 70, 0.14, 91);
+    });
+    const far = skyline(1920, 420, 420, '#6a4a7a', '#ffcf8a', 61, 50, 170, 0.12);
+    const [m, mx] = cv(1920, 470), r = rng(77);
+    for (let i = 0; i < 16; i++) {  // 低い家並み
+      const hx = i * 120 + r() * 20, hw = 100, hh = 70 + r() * 40, top = 470 - 40 - hh;
+      R(mx, ['#d9c6d2', '#cbb8cf', '#e2d1c6'][i % 3], hx, top, hw, hh + 40);
+      mx.fillStyle = ['#6a5a8c', '#7c5f7d', '#5d6a8f'][i % 3];
+      mx.beginPath(); mx.moveTo(hx - 8, top); mx.lineTo(hx + hw / 2, top - 30); mx.lineTo(hx + hw + 8, top); mx.fill();
+      R(mx, r() < 0.5 ? '#ffd9a0' : '#8a7fa6', hx + 16, top + 18, 20, 16); R(mx, r() < 0.5 ? '#ffd9a0' : '#8a7fa6', hx + hw - 36, top + 18, 20, 16);
+    }
+    for (let i = 0; i < 6; i++) { const px = i * 340 + 120; R(mx, '#4d4256', px, 150, 6, 320); R(mx, '#4d4256', px - 16, 168, 38, 4); }
+    mx.strokeStyle = 'rgba(50,40,70,.55)'; mx.lineWidth = 1;
+    for (let k = 0; k < 2; k++) { mx.beginPath(); mx.moveTo(0, 172 + k * 6); for (let px = 0; px <= 1920; px += 340) mx.quadraticCurveTo(px + 170, 196 + k * 6, px + 340, 172 + k * 6); mx.stroke(); }
+    const floor = floorTile([['#9a8ea6', 0, 14], ['#7d7290', 14, 72]], fx => {
+      for (let i = 0; i < 1920; i += 48) R(fx, '#8b7f9c', i, 14, 2, 58);
+      R(fx, '#c9bfd6', 0, 0, 1920, 3);
+    });
+    return { sky: s, layers: [{ img: far, f: 0.15, y: 50 }, { img: m, f: 0.5, y: 0 }], floor, ambient: 'petal' };
+  }
+
   function floorTile(bands, extra) {
     const [c, x] = cv(1920, VIEW_H - GROUND_Y);
     bands.forEach(([col, y0, y1]) => R(x, col, 0, y0, 1920, y1 - y0));
@@ -199,7 +225,7 @@ const Backgrounds = (() => {
   const cache = {};
   function get(name) {
     if (!cache[name]) cache[name] = ({
-      street, schoolyard, corridor, homeec,
+      street, schoolyard, corridor, homeec, town,
       rooftop: () => rooftop(false), rooftop_calm: () => rooftop(true),
     })[name]();
     return cache[name];

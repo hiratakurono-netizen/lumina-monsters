@@ -52,6 +52,11 @@ class World {
       if (this.state === 'play') this.checkEvents();
     } else if (P.state !== 'attack') { P.vx = 0; P.anim = 'idle'; P.ft += dt; if (P.ft > 0.22) { P.ft = 0; P.frame = (P.frame + 1) % 4; } P.physics(dt); }
     if (this.partnerOn) this.partner.update(dt);
+    // 町：近くの施設を調べる
+    if (this.ch.town) {
+      this.nearFac = Town.near(this);
+      if (this.nearFac && !this.dialogue && this.state === 'play' && !UI.isOpen && Input.hit('down')) Town.interact(this.nearFac, this.game);
+    }
 
     for (const e of this.enemies) e.update(dt);
     this.enemies = this.enemies.filter(e => !e.dead);
@@ -268,6 +273,7 @@ class World {
     const cam = Math.round(this.camX);
     Backgrounds.draw(ctx, this.bg, cam);
     this.terrain.draw(ctx, cam);
+    if (this.ch.town) Town.drawFacilities(ctx, cam, this);
     this.drawProps(ctx, cam);
     this.drawItems(ctx, cam);
     for (const f of this.fxBack) f.draw(ctx, cam);
