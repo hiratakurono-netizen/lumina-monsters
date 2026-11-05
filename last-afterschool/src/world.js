@@ -346,6 +346,10 @@ class World {
         ctx.fillStyle = '#ff6a2a'; ctx.beginPath(); ctx.moveTo(x - 14, y - 10); ctx.quadraticCurveTo(x, y - 52 - f, x + 14, y - 10); ctx.fill();
         ctx.fillStyle = '#ffd36a'; ctx.beginPath(); ctx.moveTo(x - 7, y - 10); ctx.quadraticCurveTo(x, y - 34 + f, x + 7, y - 10); ctx.fill();
         if (Math.abs(this.player.x - o.x) < 160 && !(this.player.tempElT > 0)) { ctx.font = `12px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffd6a0'; ctx.fillText('ふれると炎', x, y - 64); ctx.textAlign = 'left'; }
+      } else if (o.kind === 'bush' && IMG[ENV.bush] && IMG[ENV.bush].width) {
+        const im = IMG[o.alt ? ENV.bush2 : ENV.bush]; ctx.drawImage(im, Math.round(x - im.width * 0.4), Math.round(y - im.height * 0.8 + 2), im.width * 0.8, im.height * 0.8);
+      } else if (o.kind === 'flowers') {
+        const im = IMG[ENV.flowers]; if (im && im.width) ctx.drawImage(im, Math.round(x - im.width * 0.35), Math.round(y - im.height * 0.7 + 2), im.width * 0.7, im.height * 0.7);
       } else if (o.kind === 'bush') {
         ctx.fillStyle = '#4f7f52'; for (const [a, b, r] of [[-14, -14, 16], [12, -14, 15], [0, -24, 16]]) { ctx.beginPath(); ctx.arc(x + a, y + b, r, 0, 7); ctx.fill(); }
         ctx.fillStyle = '#6fa06a'; for (const [a, b] of [[-10, -22], [8, -26], [16, -12]]) R('#8fca7a', a, b, 4, 4);
@@ -400,7 +404,9 @@ class World {
     if (r.tier >= 2) { const g = ctx.createLinearGradient(0, y - 220, 0, y); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, r.color); ctx.globalAlpha = 0.35 + Math.sin(p.t * 4) * 0.1; ctx.fillStyle = g; ctx.fillRect(x - 6, y - 220, 12, 220); }
     ctx.globalAlpha = 0.55; const g2 = ctx.createRadialGradient(x, y, 2, x, y, 30); g2.addColorStop(0, r.color); g2.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g2; ctx.fillRect(x - 30, y - 30, 60, 60);
     ctx.restore();
-    Icons.draw(ctx, b.kind === 'weapon' ? b.type : b.kind === 'armor' ? 'armor' : 'acc', x, y, 1.6);
+    const ic = ITEM_ICON[b.id] && IMG[ITEM_ICON[b.id]];
+    if (ic && ic.width) { const s = 34 / Math.max(ic.width, ic.height); ctx.drawImage(ic, Math.round(x - ic.width * s / 2), Math.round(y - ic.height * s / 2), ic.width * s, ic.height * s); }
+    else Icons.draw(ctx, b.kind === 'weapon' ? b.type : b.kind === 'armor' ? 'armor' : 'acc', x, y, 1.6);
   }
   drawDungeon(ctx, cam) {
     for (const c of this.chests) {

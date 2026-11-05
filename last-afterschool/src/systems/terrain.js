@@ -55,10 +55,35 @@ class Terrain {
     return hit;
   }
 
+  // 素材の地面（上に草、下に土の帯）を敷き詰める。すり抜け床は草の縁だけの薄い足場
+  drawTextured(ctx, cam, tex) {
+    const TW = tex.width, top = 26, soil = [30, tex.height - 30];
+    for (const s of this.solids) {
+      const x0 = Math.round(s.x - cam), y = Math.round(s.y);
+      if (x0 + s.w < -10 || x0 > VIEW_W + 10) continue;
+      ctx.save(); ctx.beginPath(); ctx.rect(x0, y - 8, s.w, VIEW_H); ctx.clip();
+      const sx0 = ((s.x % TW) + TW) % TW;
+      if (s.type === 'oneway') {
+        for (let x = x0 - sx0; x < x0 + s.w; x += TW) ctx.drawImage(tex, 0, 0, TW, top, x, y - 6, TW, top);
+        ctx.fillStyle = 'rgba(20,10,30,.45)'; ctx.fillRect(x0, y + top - 6, s.w, 6);
+      } else {
+        const h = Math.min(s.h, VIEW_H - y + 20);
+        for (let x = x0 - sx0; x < x0 + s.w; x += TW) {
+          ctx.drawImage(tex, x, y - 6);
+          for (let yy = y - 6 + tex.height; yy < y + h; yy += soil[1]) ctx.drawImage(tex, 0, soil[0], TW, soil[1], x, yy, TW, soil[1]);
+        }
+        // 側面（段差・壁）に影
+        ctx.fillStyle = 'rgba(20,10,30,.35)'; ctx.fillRect(x0, y + 10, 3, h); ctx.fillRect(x0 + s.w - 3, y + 10, 3, h);
+      }
+      ctx.restore();
+    }
+  }
   /** 足場の描画（地形データがある時だけ）。見た目は theme で変える */
   draw(ctx, cam) {
     if (!this.solids.length) return;
     const th = Object.assign({ top: '#8fb27a', side: '#5d6e4f', dark: '#3e4a35', edge: '#c8e0a8', oneway: '#b89a7a', onewayTop: '#e2cfa8' }, this.theme || {});
+    const tex = th.texture && IMG[th.texture];
+    if (tex && tex.width) return this.drawTextured(ctx, cam, tex);
     for (const s of this.solids) {
       const x = Math.round(s.x - cam), y = Math.round(s.y);
       if (x + s.w < -10 || x > VIEW_W + 10) continue;

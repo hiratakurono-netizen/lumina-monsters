@@ -5,6 +5,15 @@
 //  ※ 名前・数値はすべて仮。草原のプレイテストで調整する
 // =====================================================================
 
+// 素材シート（tools/extract_env.py で切り出し）の画像
+const ENV = {
+  bg_grass: 'assets/env/bg_grass.png', ground_grass: 'assets/env/ground_grass.png', ground_road: 'assets/env/ground_road.png',
+  bush: 'assets/env/bush.png', bush2: 'assets/env/bush2.png', flowers: 'assets/env/flowers.png',
+  store: 'assets/env/store.png', school: 'assets/env/school.png', bench: 'assets/env/bench.png', lamp: 'assets/env/lamp.png', vending: 'assets/env/vending.png', pole: 'assets/env/pole.png',
+};
+// 専用のアイコン画像がある装備
+const ITEM_ICON = { w_chair_pipe: 'assets/env/i_chair_pipe.png', w_bat_mop: 'assets/env/i_bat_mop.png', w_bat_metal: 'assets/env/i_bat_metal.png' };
+
 const RARITIES = [
   { id: 'common',   name: 'コモン',     color: '#e8e4f0', affixes: 0, mul: 1.00, weight: 60 },
   { id: 'uncommon', name: 'アンコモン', color: '#7fe08a', affixes: 1, mul: 1.08, weight: 28 },
@@ -80,3 +89,6 @@ const STARTER_KIT = {
     { base: 'a_uniform', rarity: 'common', affixes: [] },
   ],
 };
+
+// 元データに自分の id を持たせる（アイコンの引き当て用）
+for (const [id, b] of Object.entries(ITEM_BASES)) b.id = id;

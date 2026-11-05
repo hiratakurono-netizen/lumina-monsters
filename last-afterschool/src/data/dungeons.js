@@ -16,7 +16,7 @@ const BL = (x, y, w, h) => ({ x, y, w, h });                                 // 
 const DUNGEONS = {
   grassland: {
     name: '草原', bg: 'grassland', bgm: 'battle', bossBgm: 'boss', jumpMul: 1,
-    terrainTheme: { top: '#7fb069', side: '#5b4a5e', dark: '#463a4c', edge: '#b9e08f', oneway: '#8a6e5a', onewayTop: '#c9a77e' },
+    terrainTheme: { texture: ENV.ground_grass, top: '#7fb069', side: '#5b4a5e', dark: '#463a4c', edge: '#b9e08f', oneway: '#8a6e5a', onewayTop: '#c9a77e' },
     // 階ごとの敵の出現表（重み）。深い階ほど種類が増える
     foes(floor) {
       const t = [['slime', 5], ['sprout', 4], ['bat', 3]];

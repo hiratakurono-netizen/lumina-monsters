@@ -208,7 +208,9 @@ const Backgrounds = (() => {
     for (let i = 0; i < 6; i++) { const px = i * 340 + 120; R(mx, '#4d4256', px, 150, 6, 320); R(mx, '#4d4256', px - 16, 168, 38, 4); }
     mx.strokeStyle = 'rgba(50,40,70,.55)'; mx.lineWidth = 1;
     for (let k = 0; k < 2; k++) { mx.beginPath(); mx.moveTo(0, 172 + k * 6); for (let px = 0; px <= 1920; px += 340) mx.quadraticCurveTo(px + 170, 196 + k * 6, px + 340, 172 + k * 6); mx.stroke(); }
+    const road = IMG[ENV.ground_road];
     const floor = floorTile([['#9a8ea6', 0, 14], ['#7d7290', 14, 72]], fx => {
+      if (road && road.width) { for (let i = 0; i < 1920; i += road.width) { fx.drawImage(road, i, 0, road.width, 48); fx.drawImage(road, 0, 20, road.width, 28, i, 48, road.width, 28); } return; }
       for (let i = 0; i < 1920; i += 48) R(fx, '#8b7f9c', i, 14, 2, 58);
       R(fx, '#c9bfd6', 0, 0, 1920, 3);
     });
@@ -217,7 +219,19 @@ const Backgrounds = (() => {
 
 
   // 魔界・草原（紫がかった空と草の丘。床は暗い奈落＝穴の底に見える）
+  // 草原：もらった背景素材（夜の丘と木）を地面まで届く高さに拡大し、左右反転をつなげて継ぎ目なく流す
+  function grasslandArt() {
+    const src = IMG[ENV.bg_grass]; if (!src || !src.width) return null;
+    const H = GROUND_Y + 16, k = H / src.height, w = Math.round(src.width * k);
+    const [tile, tx] = cv(w * 2, H);
+    tx.drawImage(src, 0, 0, w, H);
+    tx.save(); tx.translate(w * 2, 0); tx.scale(-1, 1); tx.drawImage(src, 0, 0, w, H); tx.restore();
+    const [s, sx] = cv(VIEW_W, VIEW_H); sx.fillStyle = '#28234f'; sx.fillRect(0, 0, VIEW_W, VIEW_H);
+    const floor = floorTile([['#0e0818', 0, 72]]);
+    return { sky: s, layers: [{ img: tile, f: 0.25, y: 0 }], floor, ambient: 'mote' };
+  }
   function grassland() {
+    const art = grasslandArt(); if (art) return art;
     const s = sky([[0, '#1f1838'], [0.5, '#3d3a6a'], [1, '#6a8a8a']], x => {
       x.fillStyle = 'rgba(220,240,255,.75)'; x.beginPath(); x.arc(760, 110, 52, 0, 7); x.fill();
       x.fillStyle = 'rgba(31,24,56,.9)'; x.beginPath(); x.arc(780, 100, 46, 0, 7); x.fill();   // 欠けた月

@@ -9,6 +9,11 @@ const TOWN = {
   id: 'town', town: true, title: '現世', sub: `${NAMES.town}の町`, bg: 'town', bgm: 'morning', length: 3020,
   loadout: { weapons: [], fire: false, partner: true, canFight: false },
   intro: [], events: [], endX: 99999, outro: [],
+  // 街の飾り（街灯・ベンチ・自販機）。x は町の座標、s は拡大率
+  decor: [
+    { x: 120, img: 'lamp', s: 1.6 }, { x: 640, img: 'vending', s: 1.5 }, { x: 700, img: 'lamp', s: 1.6 },
+    { x: 1300, img: 'bench', s: 1.4 }, { x: 1830, img: 'lamp', s: 1.6 }, { x: 2250, img: 'bench', s: 1.4 }, { x: 2380, img: 'vending', s: 1.5 }, { x: 2950, img: 'lamp', s: 1.6 },
+  ],
   facilities: [
     { id: 'home',  x: 340,  name: '自宅' },
     { id: 'shop',  x: 980,  name: 'コンビニ' },
@@ -49,7 +54,13 @@ const Town = {
       R('#2a2140', x - w / 2, y - 18, w, 26); R('#b9a2ff', x - w / 2, y - 18, w, 2);
       ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.fillText(text, x, y); ctx.textAlign = 'left';
     };
+    for (const d of TOWN.decor) {   // 街の飾り
+      const im = IMG[ENV[d.img]], x = d.x - cam;
+      if (!im || !im.width || x < -100 || x > VIEW_W + 100) continue;
+      ctx.drawImage(im, Math.round(x - im.width * d.s / 2), Math.round(G - im.height * d.s + 2), im.width * d.s, im.height * d.s);
+    }
     const FZ = 1.45;   // 建物の拡大率（地面を基準に大きく描く）
+    const art = (key, x, s) => { const im = IMG[ENV[key]]; if (!im || !im.width) return false; ctx.drawImage(im, Math.round(x - im.width * s / 2), Math.round(G - im.height * s + 3), im.width * s, im.height * s); return im.height * s; };
     for (const f of TOWN.facilities) {
       const x = f.x - cam;
       if (x < -320 || x > VIEW_W + 320) continue;
@@ -60,6 +71,8 @@ const Town = {
         R('#ffd9a0', x - 85, G - 160, 44, 36); R('#ffd9a0', x + 41, G - 160, 44, 36);
         R('#6d5248', x - 22, G - 92, 44, 92); R('#d8b080', x + 12, G - 50, 5, 5);
         sign(x, G - 205, '自宅');
+      } else if (f.id === 'shop' && IMG[ENV.store] && IMG[ENV.store].width) {
+        const hh = art('store', x, 1.9 / FZ); sign(x, G - hh - 14, 'コンビニ');
       } else if (f.id === 'shop') {
         R('#f2eef4', x - 130, G - 170, 260, 170);
         for (let i = 0; i < 13; i++) R(i % 2 ? '#fff' : '#6ab48a', x - 130 + i * 20, G - 170, 20, 22);
@@ -74,6 +87,13 @@ const Town = {
       } else if (f.id === 'mio') {
         this.drawMio(ctx, x, G, t);
         ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffd6e6'; ctx.textAlign = 'center'; ctx.fillText(NAMES.friend, x, G - 170); ctx.textAlign = 'left';
+      } else if (f.id === 'gate' && IMG[ENV.school] && IMG[ENV.school].width) {
+        const hh = art('school', x, 2.3 / FZ);
+        const a = 0.35 + Math.sin(t * 2.4) * 0.12;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const g = ctx.createRadialGradient(x, G - hh - 10, 6, x, G - hh - 10, 120); g.addColorStop(0, `rgba(200,140,255,${a})`); g.addColorStop(1, 'rgba(120,60,200,0)');
+        ctx.fillStyle = g; ctx.fillRect(x - 130, G - hh - 130, 260, 240); ctx.restore();
+        sign(x, G - hh - 14, '学校（屋上のゲート）');
       } else if (f.id === 'gate') {
         R('#cdbfcf', x - 140, G - 260, 280, 260); for (let i = 0; i < 3; i++) for (let j = 0; j < 4; j++) R('#6e5a7e', x - 120 + j * 66, G - 240 + i * 70, 44, 40);
         R('#5a4a66', x - 34, G - 110, 68, 110);
@@ -96,18 +116,13 @@ const Town = {
   },
   // 友人ミオ：専用の絵がまだないので、主人公の待機絵を暗い色に染めた仮の姿（仮実装）
   _mio: null,
+  // 親友ミオ：立ち姿3ポーズをゆっくり切り替える
   drawMio(ctx, x, G, t) {
-    const set = SPRITE_DATA.heroine.idle, f = set.frames[0], img = IMG[set.img];
+    const set = SPRITE_DATA.friend.stand, img = IMG[set.img];
     if (!img || !img.width) return;
-    if (!this._mio) {
-      const c = document.createElement('canvas'); c.width = f.w; c.height = f.h; const x2 = c.getContext('2d');
-      x2.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
-      x2.globalCompositeOperation = 'source-atop'; x2.fillStyle = 'rgba(60,40,70,.55)'; x2.fillRect(0, 0, f.w, f.h);
-      this._mio = c;
-    }
-    const sc = set.scale, bob = Math.sin(t * 2) * 1.5;
-    ctx.save(); ctx.translate(Math.round(x), Math.round(G)); ctx.scale(-1, 1);
-    ctx.drawImage(this._mio, -f.ax * sc, -f.ay * sc + bob, f.w * sc, f.h * sc); ctx.restore();
+    const f = set.frames[[0, 1, 0, 2][Math.floor(t / 2.4) % 4]], sc = set.scale, bob = Math.sin(t * 2) * 1;
+    ctx.fillStyle = 'rgba(10,0,20,.3)'; ctx.beginPath(); ctx.ellipse(x, G + 2, 26, 6, 0, 0, 7); ctx.fill();
+    ctx.drawImage(img, f.x, f.y, f.w, f.h, Math.round(x - f.ax * sc), Math.round(G - f.ay * sc + bob), f.w * sc, f.h * sc);
   },
   drawHud(ctx, W, save) {
     panel(ctx, 14, 12, 300, 58, 'rgba(18,12,34,.85)', '#8f7fd0');
@@ -124,10 +139,10 @@ const Town = {
     if (f.id === 'shop') return this.openShop(game);
     if (f.id === 'gate') return this.openGate(game);
     if (f.id === 'mio') return W.say([
-      L('friend', `あ、{hero}！ 学校、しばらく休校だって。`),
-      L('friend', 'ねえ、最近ちょっと疲れた顔してない？'),
+      L('friend', `あ、{hero}！ 学校、しばらく休校だって。`, 'laugh'),
+      L('friend', 'ねえ、最近ちょっと疲れた顔してない？', 'think'),
       L('hero', 'ううん、大丈夫。', 'default'),
-      L('friend', '無理しないでね。駅前のクレープ、また一緒に行こ？ 約束だよ。'),
+      L('friend', '無理しないでね。駅前のクレープ、また一緒に行こ？ 約束だよ。', 'shy'),
       L('hero', '……うん。約束。', 'sad'),
     ]);
     if (f.id === 'smith') return W.say([
@@ -185,7 +200,7 @@ const Town = {
       slotDefs.slice(0, 3).forEach((d, i) => doll.append(slotTile(d, 1, i + 1)));
       doll.append(h('div', { class: 'hero', style: { gridColumn: 2, gridRow: '1 / 4' } }, h('img', { src: Town.heroPortrait(), alt: NAMES.hero })));
       slotDefs.slice(3).forEach((d, i) => doll.append(slotTile(d, 3, i + 1)));
-      left.append(doll);
+      left.append(doll, this.homeDetail(game, st8, { slotDefs, slotUid, kindOf, firstSlot, basicText, diffText, kindLabel }));   // 詳細は主人公の下（一覧に重ならない）
       // 右：持ち物
       const right = h('div', { class: 'home-right' });
       const cats = [['all', 'すべて'], ['weapon', '武器'], ['armor', '防具'], ['accessory', 'アクセ'], ['cons', '道具']];
@@ -211,7 +226,7 @@ const Town = {
       }
       if (!grid.children.length) grid.append(h('div', { class: 'ui-note' }, 'ここには何もありません。'));
       right.append(grid, h('div', { class: 'inv-count' }, `装備品 ${s.bag.length} / ${BAG_MAX}`));
-      wrap.append(left, right); el.append(wrap, this.homeDetail(game, st8, { slotDefs, slotUid, kindOf, firstSlot, basicText, diffText, kindLabel }));   // 詳細は画面下に固定
+      wrap.append(left, right); el.append(wrap);
       if (s.bag.some(it => it.isNew)) { s.bag.forEach(it => { delete it.isNew; }); this.save(game); }   // 見たので NEW を外す（次に開いた時から消える）
     };
     const statusTab = el => {
@@ -277,7 +292,7 @@ const Town = {
       const main = sel.slot && k.kindOf(sel.slot) === kind ? sel.slot : k.firstSlot(kind);
       box.append(h('div', { class: 'd-cmp' }, [`${k.slotDefs.find(d => d[0] === main)[1]}と比べると：`, k.diffText(main, it.uid)]));
       targets.forEach(x => acts.append(h('button', { class: 'ui-btn' + (x === main ? '' : ' ghost'), onclick: () => { Inv.equip(s, x, it.uid); st8.sel = { slot: x, uid: it.uid }; done(); } },
-        targets.length > 1 ? `${k.slotDefs.find(d => d[0] === x)[1]}に装備` : '装備する')));
+        targets.length > 1 ? `${k.slotDefs.find(d => d[0] === x)[1]}へ` : '装備する')));
     }
     box.append(acts);
     return box;
@@ -285,8 +300,9 @@ const Town = {
   // 持ち物のアイコン（武器は武器の絵、ほかは小さなドット絵）をキャッシュして返す
   _icons: {},
   itemIcon(b) {
-    const key = b.kind === 'weapon' ? 'w_' + b.type : b.kind === 'cons' ? 'c_' + b.id : b.kind;
+    const key = b.id && ITEM_ICON[b.id] ? b.id : b.kind === 'weapon' ? 'w_' + b.type : b.kind === 'cons' ? 'c_' + b.id : b.kind;
     if (this._icons[key]) return this._icons[key];
+    if (b.id && ITEM_ICON[b.id]) return (this._icons[key] = ITEM_ICON[b.id]);
     if (b.kind === 'weapon') return (this._icons[key] = WEAPON_ART[b.type].file);
     const c = document.createElement('canvas'); c.width = 48; c.height = 48; const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
     Icons.draw(x, b.kind === 'cons' ? b.id : b.kind === 'armor' ? 'armor' : 'acc', 24, 26, 2.4);
@@ -322,7 +338,7 @@ const Town = {
       for (const { id, need } of this.SHOP_STOCK) {
         if (need && !need(s)) continue;
         const c = CONSUMABLES[id], have = Inv.count(s, id), can = s.gold >= c.price && have < c.max;
-        el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${c.name}　${c.price} G`), h('div', { class: 'sub' }, `${c.desc}（所持 ${have} / ${c.max}）`)]),
+        el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, c.name), h('div', { class: 'sub' }, `${c.desc}（所持 ${have} / ${c.max}）`)]), h('div', { class: 'price' }, `${c.price} G`),
           h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= c.price; Inv.addItem(s, id, 1); this.save(game); Audio2.sfx('pickup'); UI.render(); } }, '買う')]));
       }
       if (!s.shop) { this.restock(s); this.save(game); }
@@ -331,7 +347,7 @@ const Town = {
       s.shop.items.forEach((it, i) => {
         const b = Inv.base(it), r = Inv.rarity(it), price = Inv.buyPrice(it), can = s.gold >= price && s.bag.length < BAG_MAX;
         const basic = b.kind === 'weapon' ? `威力 ${b.atk}` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ');
-        el.append(h('div', { class: 'ui-row', style: { '--rc': r.color } }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${Inv.name(it)}　${price} G`), h('div', { class: 'sub' }, [`${r.name}・${basic}`, ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join(''))]),
+        el.append(h('div', { class: 'ui-row', style: { '--rc': r.color } }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, Inv.name(it)), h('div', { class: 'sub' }, [`${r.name}・${basic}`, ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join(''))]), h('div', { class: 'price' }, `${price} G`),
           h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= price; s.shop.items.splice(i, 1); it.uid = s.uid++; it.isNew = true; Inv.add(s, it); this.save(game); Audio2.sfx('pickup'); UI.toast(`${b.name}を買いました（自宅で装備できます）`); UI.render(); } }, '買う')]));
       });
     };

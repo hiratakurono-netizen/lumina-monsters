@@ -121,7 +121,7 @@
   .detail .d-sub, .detail .d-cmp { flex: 1 1 260px; min-width: 0; }
   .detail .d-acts { margin-left: auto; }
   .d-name { font-size: 17px; color: var(--rc, #f0e8ff); }
-  .d-rar { margin-left: 8px; font-size: 12px; color: #b9aee0; }
+  .d-rar { margin-left: 8px; font-size: 12px; color: #b9aee0; white-space: nowrap; }
   .d-sub, .d-cmp { font-size: 13px; color: #cfc3ea; line-height: 1.5; }
   .d-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: #ffe9a8; }
   .d-acts { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -132,6 +132,58 @@
     background: #120c22; border: 1px solid #3b2d63; border-radius: 10px; min-height: 160px; }
   .inv-count { font-size: 12px; color: #9d90c8; text-align: right; }
   @media (max-width: 620px) { .home { grid-template-columns: minmax(0, 1fr); } }
+  /* ---- メニューの密度を上げる（スマホ横持ちで画面に収まる大きさ） ---- */
+  .ui-panel { max-width: 720px; }
+  .ui-body > * { flex-shrink: 0; }   /* 行が縮んで重ならないように（入りきらない分はスクロール） */
+  .ui-head { padding: 4px 6px 4px 14px; gap: 8px; }
+  .ui-title { font-size: 16px; }
+  .ui-head-right { font-size: 13px; }
+  .ui-close { min-width: 36px; min-height: 36px; font-size: 15px; }
+  .ui-tabs { padding: 4px 6px 0; }
+  .ui-tab { min-height: 32px; font-size: 13px; }
+  .ui-body { padding: 8px 10px 10px; gap: 6px; }
+  .ui-h { font-size: 12px; margin-top: 6px; letter-spacing: .05em; }
+  .ui-row { min-height: 0; padding: 6px 10px; gap: 10px; border-left-width: 4px; }
+  .ui-row .name { font-size: 14px; line-height: 1.35; }
+  .ui-row .sub { font-size: 11px; line-height: 1.45; margin-top: 3px; color: #a99fd0; }
+  .ui-row .price { flex-shrink: 0; min-width: 64px; text-align: right; font-size: 14px; color: #ffe27a; font-variant-numeric: tabular-nums; }
+  .ui-btn { min-width: 56px; min-height: 34px; padding: 0 10px; font-size: 13px; }
+  .ui-note { font-size: 12px; }
+  /* 自宅 */
+  .ui-panel.wide { max-width: 860px; height: auto; max-height: 100%; }
+  .home { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 10px; padding-bottom: 0; }
+  .doll { grid-template-columns: 50px minmax(0, 1fr) 50px; grid-template-rows: repeat(3, 50px); gap: 6px 8px; }
+  .tile { width: 50px; height: 50px; padding: 3px; border-width: 2px; border-radius: 8px; }
+  .tile .cap { font-size: 8px; }
+  .tile .slot-label { font-size: 10px; }
+  .tile .badge { font-size: 10px; }
+  .tile .eq { font-size: 9px; }
+  .tile .new { width: 7px; height: 7px; }
+  .doll .hero img { height: 118%; }
+  .detail { position: static; margin: 0; padding: 6px 10px; box-shadow: none; gap: 2px 10px; min-height: 76px; align-content: flex-start; }
+  .d-name { font-size: 14px; }
+  .d-sub, .d-cmp { font-size: 11px; }
+  .d-stats { font-size: 12px; gap: 4px 10px; }
+  .d-acts { gap: 4px; }
+  .detail .d-acts { margin-left: 0; }
+  .cats { gap: 3px; }
+  .cat { min-height: 30px; font-size: 12px; }
+  .inv-grid { grid-template-columns: repeat(auto-fill, 50px); gap: 6px; padding: 6px; min-height: 0; }
+  .inv-count { font-size: 11px; }
+  /* 自宅：主人公まわりを詰めて、詳細と装備ボタンまで1画面に収める */
+  .doll { grid-template-columns: 44px minmax(0, 1fr) 44px; grid-template-rows: repeat(3, 44px); gap: 5px 8px; }
+  .doll .tile { width: 44px; height: 44px; }
+  .detail { min-height: 64px; }
+  .detail .d-sub { flex: 1 1 100%; }
+  .detail .d-cmp { flex: 0 1 auto; }
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 2px; align-items: start; }
+  .detail > :not(.d-acts) { grid-column: 1 / -1; }
+  .detail > .d-name { grid-column: 1; align-self: center; }
+  .detail .d-acts { grid-column: 2; grid-row: 1; flex-direction: row; flex-wrap: nowrap; margin: 0; }
+  .doll { grid-template-columns: 40px minmax(0, 1fr) 40px; grid-template-rows: repeat(3, 40px); gap: 4px 8px; }
+  .doll .tile { width: 40px; height: 40px; }
+  .detail .ui-btn { min-width: 0; padding: 0 8px; }
+  .detail .ui-btn { min-height: 28px; font-size: 12px; padding: 0 10px; }
 </style>
 <div id="wrap"><canvas id="game" width="1920" height="1080"></canvas></div>
 <div id="touch" aria-hidden="true">

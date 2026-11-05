@@ -62,10 +62,12 @@ const DungeonGen = {
       for (const cs of c.chests) if (cs.hidden || rng.chance(0.55)) ch.chests.push({ x: cs.x + x, y: cs.y, hidden: !!cs.hidden, viaSpring: !!cs.viaSpring, floor });
       for (const o of c.objs || []) {
         if (o.bossOnly && o.bossOnly !== floor) continue;
-        if (rng.chance(o.p)) ch.objs.push({ x: o.x + x, y: o.y || GROUND_Y, kind: o.kind });
+        if (rng.chance(o.p)) ch.objs.push({ x: o.x + x, y: o.y || GROUND_Y, kind: o.kind, alt: rng.chance(0.5) });
       }
       if (c.wave) ch.events.push({ x: x + 200, type: 'wave', waves: [this.waveList(rng, foes, floor), this.waveList(rng, foes, floor)], hpMul, dmgMul });
       if (c.boss) ch.boss = { type: D.bosses[floor], x: x + c.w - 300, hpMul: 1 + 0.05 * (floor - 1) };
+      // 飾りの花（触れても何も起きない）
+      for (const t of c.solids) if (t.y === GROUND_Y && t.w > 200) for (let fx = t.x + 60; fx < t.x + t.w - 60; fx += 260) if (rng.chance(0.35)) ch.objs.push({ x: fx + x + rng.int(-40, 40), y: GROUND_Y, kind: 'flowers' });
       if (c.exitX) ch.exitX = x + c.exitX;
       x += c.w;
     }

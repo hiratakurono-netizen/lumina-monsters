@@ -53,6 +53,10 @@ class Dialogue {
       const img = IMG[SPRITE_DATA.portraits[L.face || 'default']];
       panel(ctx, x + 14, y + 14, 122, 122, '#2a2140', '#e0d0ff');
       ctx.drawImage(img, x + 19, y + 19, 112, 112); tx = x + 156;
+    } else if (L.who === 'friend' && SPRITE_DATA.friend && !L.text.startsWith('📱')) {
+      const img = IMG[SPRITE_DATA.friend.faces[L.face || 'happy']];
+      panel(ctx, x + w - 136, y + 14, 122, 122, '#2a2140', '#ffd6e6');
+      if (img && img.width) ctx.drawImage(img, x + w - 131, y + 19, 112, 112);
     } else if (L.who === 'partner' || L.who === '???') {
       panel(ctx, x + w - 136, y + 14, 122, 122, '#2a2140', '#fff4d0');
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,240,200,.15)'; ctx.fillRect(x + w - 131, y + 19, 112, 112); ctx.restore();
@@ -64,9 +68,10 @@ class Dialogue {
       ctx.font = `17px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText(name, tx + 10, y + 4);
     }
     ctx.font = `20px ${FONT}`; ctx.fillStyle = L.who === 'news' ? '#bfe3ff' : L.who === 'friend' ? '#ffd6e6' : '#f4eeff';
-    const maxW = (L.who === 'partner' || L.who === '???') ? w - 190 : x + w - tx - 30;
+    const rightFace = L.who === 'partner' || L.who === '???' || (L.who === 'friend' && SPRITE_DATA.friend && !L.text.startsWith('📱'));
+    const maxW = rightFace ? w - 190 : x + w - tx - 30;
     wrap(ctx, text, tx, y + 50, maxW, 32);
-    this.prompt(ctx, x + w - (L.who === 'partner' || L.who === '???' ? 160 : 30), y + h - 18);
+    this.prompt(ctx, x + w - (rightFace ? 160 : 30), y + h - 18);
   }
   prompt(ctx, x, y) {
     if (this.chars < this.line.text.length) return;
@@ -554,6 +559,8 @@ function loadAll() {
   Object.values(SPRITE_DATA.portraits).forEach(p => paths.add(p));
   Object.values(SPRITE_DATA.swing).forEach(a => paths.add(a.img));
   paths.add(SPRITE_DATA.keyart);
+  Object.values(ENV).forEach(p => paths.add(p)); Object.values(ITEM_ICON).forEach(p => paths.add(p));
+  if (SPRITE_DATA.friend) { paths.add(SPRITE_DATA.friend.stand.img); Object.values(SPRITE_DATA.friend.faces).forEach(p => paths.add(p)); }
   Object.values(WEAPON_ART).forEach(w => paths.add(w.file));
   return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));
 }
