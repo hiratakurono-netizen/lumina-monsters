@@ -260,7 +260,7 @@ class World {
     if (type && SP_FX[type]) this.fx.push(new SpecialFx(P, type, 'lead', P.element));   // 必殺：溜め → 振りのエフェクト
     P.inv = 1.6; P.setFace('fluster', 1.6);
     this.partner.glow = 1.2; this.flash = 0.35; this.hitstop = 0.12;
-    this.floatText(P.x, P.y - 170, 'フルスイング！！', '#ffe27a', 26);
+    this.floatText(P.x, P.y - 170, (type && SPECIAL_NAMES[type]) || 'フルスイング！！', '#ffe27a', 26);   // 武器ごとの必殺技名
     Audio2.sfx('transform');
   }
   killEnemy(e) {
