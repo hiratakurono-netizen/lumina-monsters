@@ -158,12 +158,13 @@ const Town = {
   goldHead(game) { return () => `所持金 ${game.save.gold} G`; },
 
   // ---- 自宅：装備・持ち物・ステータス・セーブ ----
-  openHome(game) {
-    const s = game.save, h = UI.h;
+  // opts.field：ダンジョンの「道具」から開いた時。装備の変更はできず、道具を使える
+  openHome(game, opts = {}) {
+    const s = game.save, h = UI.h, field = !!opts.field;
     let selSlot = null;
-    const slotDefs = [['weapon:0', '武器1'], ['weapon:1', '武器2'], ['weapon:2', '武器3'], ['armor', '防具'], ['acc:0', 'アクセ1'], ['acc:1', 'アクセ2']];
-    const slotUid = sl => { const [k, i] = sl.split(':'); return k === 'weapon' ? s.equip.weapons[+i] : k === 'acc' ? s.equip.acc[+i] : s.equip.armor; };
-    const kindOf = sl => (sl.startsWith('weapon') ? 'weapon' : sl.startsWith('acc') ? 'accessory' : 'armor');
+    const slotDefs = [['weapon:0', '武器1'], ['weapon:1', '武器2'], ['weapon:2', '武器3'], ['armor', '防具'], ['acc:0', 'アクセ1'], ['acc:1', 'アクセ2'], ['partner', NAMES.partner]];
+    const slotUid = sl => { const [k, i] = sl.split(':'); return k === 'weapon' ? s.equip.weapons[+i] : k === 'acc' ? s.equip.acc[+i] : k === 'partner' ? s.equip.partner : s.equip.armor; };
+    const kindOf = sl => (sl.startsWith('weapon') || sl === 'partner' ? 'weapon' : sl.startsWith('acc') ? 'accessory' : 'armor');
     const itemRow = (it, extra = []) => {
       const r = Inv.rarity(it), b = Inv.base(it);
       const basic = b.kind === 'weapon' ? `威力 ${b.atk}（${r.name}）` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ') || r.name;
@@ -187,10 +188,28 @@ const Town = {
     // ---- 装備・持ち物（中央に主人公、左右に装備枠、右に持ち物のアイコン一覧） ----
     const st8 = this._home = this._home || { sel: null, cat: 'all' };
     const kindLabel = { weapon: '武器', armor: '防具', accessory: 'アクセ' };
-    const firstSlot = kind => { const list = slotDefs.filter(([sl]) => kindOf(sl) === kind).map(([sl]) => sl); return list.find(sl => slotUid(sl) == null) || list[0]; };
+    const firstSlot = kind => { const list = slotDefs.filter(([sl]) => kindOf(sl) === kind && sl !== 'partner').map(([sl]) => sl); return list.find(sl => slotUid(sl) == null) || list[0]; };
     const basicText = it => { const b = Inv.base(it); return b.kind === 'weapon' ? `威力 ${b.atk}${b.crit ? ` / 会心 +${b.crit}%` : ''}` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ') || '効果なし'; };
     const icon = it => h('img', { src: Town.itemIcon(Inv.base(it)), alt: '', draggable: 'false' });
-    const pick = sel => () => { st8.sel = sel; Audio2.sfx('blip'); UI.render(); };
+    // まとめて捨てる：選択モードではタップで選ぶ／外す（装備中の物は選べない）
+    st8.picked = st8.picked || new Set();
+    const keyOf = sel => (sel.uid != null && !sel.slot ? 'u' + sel.uid : sel.cons ? 'c' + sel.cons : null);
+    const pick = sel => () => {
+      const k = keyOf(sel);
+      if (st8.multi && k) {
+        if (sel.uid != null && Inv.isEquipped(s, sel.uid)) { UI.toast('装備中の物は捨てられません'); return; }
+        st8.picked.has(k) ? st8.picked.delete(k) : st8.picked.add(k); st8.confirm = false; Audio2.sfx('blip'); UI.render(); return;
+      }
+      st8.sel = sel; Audio2.sfx('blip'); UI.render();
+    };
+    const discard = keys => {
+      let n = 0;
+      for (const k of keys) {
+        if (k[0] === 'u') { if (Inv.remove(s, +k.slice(1))) n++; }
+        else { const id = k.slice(1); n += Inv.count(s, id); s.items[id] = 0; }
+      }
+      return n;
+    };
     const dollTab = el => {
       const wrap = h('div', { class: 'home' });
       // 左：主人公と装備枠
@@ -203,8 +222,12 @@ const Town = {
       };
       slotDefs.slice(0, 3).forEach((d, i) => doll.append(slotTile(d, 1, i + 1)));
       doll.append(h('div', { class: 'hero', style: { gridColumn: 2, gridRow: '1 / 4' } }, h('img', { src: Town.heroPortrait(), alt: NAMES.hero })));
-      slotDefs.slice(3).forEach((d, i) => doll.append(slotTile(d, 3, i + 1)));
-      left.append(doll, this.homeDetail(game, st8, { slotDefs, slotUid, kindOf, firstSlot, basicText, diffText, kindLabel }));   // 詳細は主人公の下（一覧に重ならない）
+      slotDefs.slice(3, 6).forEach((d, i) => doll.append(slotTile(d, 3, i + 1)));
+      // ルゥの武器：持たせると一緒に戦う（突進）。武器の種類で素早さと体力が変わる
+      const pw = Stats.weapon(s, s.equip.partner), PT = pw && PARTNER_TYPES[pw.type];
+      const ruu = h('div', { class: 'ruu-row' }, [slotTile(slotDefs[6], 'auto', 'auto'),
+        h('div', { class: 'ruu-info' }, pw ? `${NAMES.partner}：${pw.name}　威力×${pw.powerMul.toFixed(1)}・素早さ${PT.label[0]}・体力${PT.label[1]}` : `${NAMES.partner}に武器を持たせると、一緒に戦ってくれる（突進）`)]);
+      left.append(doll, ruu, this.homeDetail(game, st8, { slotDefs, slotUid, kindOf, firstSlot, basicText, diffText, kindLabel, field, discard }));   // 詳細は主人公の下（一覧に重ならない）
       // 右：持ち物
       const right = h('div', { class: 'home-right' });
       const cats = [['all', 'すべて'], ['weapon', '武器'], ['armor', '防具'], ['accessory', 'アクセ'], ['cons', '道具']];
@@ -216,20 +239,35 @@ const Town = {
         [...s.bag].filter(it => st8.cat === 'all' || Inv.slotOf(it) === st8.cat)
           .sort((x, y) => order[Inv.slotOf(x)] - order[Inv.slotOf(y)] || Inv.rarity(y).tier - Inv.rarity(x).tier)
           .forEach(it => {
-            const on = st8.sel && st8.sel.uid === it.uid && !st8.sel.slot, dim = want && Inv.slotOf(it) !== want;
-            grid.append(h('button', { class: 'tile' + (on ? ' on' : '') + (dim ? ' dim' : ''), style: { '--rc': Inv.rarity(it).color }, 'aria-label': Inv.name(it), onclick: pick({ uid: it.uid }) },
+            const on = !st8.multi && st8.sel && st8.sel.uid === it.uid && !st8.sel.slot, dim = (!st8.multi && want && Inv.slotOf(it) !== want) || (st8.multi && Inv.isEquipped(s, it.uid)), pk = st8.multi && st8.picked.has('u' + it.uid);
+            grid.append(h('button', { class: 'tile' + (on ? ' on' : '') + (dim ? ' dim' : '') + (pk ? ' picked' : ''), style: { '--rc': Inv.rarity(it).color }, 'aria-label': Inv.name(it), onclick: pick({ uid: it.uid }) },
               [icon(it), Inv.isEquipped(s, it.uid) ? h('span', { class: 'eq' }, 'E') : null, it.isNew ? h('span', { class: 'new' }) : null, it.plus ? h('span', { class: 'badge' }, '+' + it.plus) : null]));
           });
       }
       if (st8.cat === 'all' || st8.cat === 'cons') {
         Object.keys(CONSUMABLES).filter(id => Inv.count(s, id)).forEach(id => {
-          const on = st8.sel && st8.sel.cons === id;
-          grid.append(h('button', { class: 'tile' + (on ? ' on' : ''), style: { '--rc': '#5a4d86' }, 'aria-label': CONSUMABLES[id].name, onclick: pick({ cons: id }) },
+          const on = !st8.multi && st8.sel && st8.sel.cons === id, pk = st8.multi && st8.picked.has('c' + id);
+          grid.append(h('button', { class: 'tile' + (on ? ' on' : '') + (pk ? ' picked' : ''), style: { '--rc': '#5a4d86' }, 'aria-label': CONSUMABLES[id].name, onclick: pick({ cons: id }) },
             [h('img', { src: Town.itemIcon({ kind: 'cons', id }), alt: '' }), h('span', { class: 'badge' }, String(Inv.count(s, id)))]));
         });
       }
       if (!grid.children.length) grid.append(h('div', { class: 'ui-note' }, 'ここには何もありません。'));
-      right.append(grid, h('div', { class: 'inv-count' }, `装備品 ${s.bag.length} / ${BAG_MAX}`));
+      // まとめて捨てる（一括選択）
+      const bar = h('div', { class: 'inv-bar' });
+      if (!st8.multi) bar.append(h('button', { class: 'ui-btn ghost small', onclick: () => { st8.multi = true; st8.picked.clear(); st8.confirm = false; UI.render(); } }, 'まとめて捨てる'));
+      else {
+        const all = [...s.bag.filter(it => (st8.cat === 'all' || Inv.slotOf(it) === st8.cat) && !Inv.isEquipped(s, it.uid)).map(it => 'u' + it.uid),
+          ...(st8.cat === 'all' || st8.cat === 'cons' ? Object.keys(CONSUMABLES).filter(id => Inv.count(s, id)).map(id => 'c' + id) : [])];
+        const n = st8.picked.size;
+        bar.append(h('button', { class: 'ui-btn ghost small', onclick: () => { all.forEach(k => st8.picked.add(k)); st8.confirm = false; UI.render(); } }, 'ぜんぶ選ぶ'),
+          h('button', { class: 'ui-btn ghost small', onclick: () => { st8.picked.clear(); st8.confirm = false; UI.render(); } }, '選び直す'),
+          h('button', { class: 'ui-btn small danger', disabled: !n, onclick: () => {
+            if (!st8.confirm) { st8.confirm = true; UI.render(); return; }
+            const got = discard([...st8.picked]); st8.picked.clear(); st8.confirm = false; st8.multi = false; st8.sel = null; this.save(game); Audio2.sfx('kick'); UI.toast(`${got} 個を捨てました`); UI.render();
+          } }, st8.confirm ? `本当に捨てる？（${n}）` : `捨てる（${n}）`),
+          h('button', { class: 'ui-btn ghost small', onclick: () => { st8.multi = false; st8.picked.clear(); st8.confirm = false; UI.render(); } }, 'やめる'));
+      }
+      right.append(bar, grid, h('div', { class: 'inv-count' }, `装備品 ${s.bag.length} / ${Inv.bagMax(s)}${st8.multi ? '　（タップで選ぶ）' : ''}`));
       wrap.append(left, right); el.append(wrap);
       if (s.bag.some(it => it.isNew)) { s.bag.forEach(it => { delete it.isNew; }); this.save(game); }   // 見たので NEW を外す（次に開いた時から消える）
     };
@@ -256,8 +294,9 @@ const Town = {
         catch (e) { msg.textContent = '読み込めませんでした：' + e.message; }
       } }, '読み込む'), msg);
     };
-    st8.sel = null;
-    UI.open({ title: '自宅', wide: true, headRight: this.goldHead(game), tabs: [
+    st8.sel = null; st8.multi = false; st8.picked.clear(); st8.confirm = false;
+    if (field) UI.open({ title: '道具', wide: true, headRight: this.goldHead(game), tabs: [{ label: '持ち物', render: dollTab }, { label: 'ステータス', render: statusTab }] });
+    else UI.open({ title: '自宅', wide: true, headRight: this.goldHead(game), tabs: [
       { label: '装備・持ち物', render: dollTab }, { label: 'ステータス', render: statusTab }, { label: 'セーブ', render: saveTab }] });
   },
 
@@ -272,9 +311,15 @@ const Town = {
         h('div', { class: 'd-sub' }, '装備枠か持ち物のアイコンをタップしてください。'));
       return box;
     }
+    // 捨てるボタン（2回押しで確定）
+    const dropBtn = (label, fn) => h('button', { class: 'ui-btn small danger', onclick: () => { if (st8.dropAsk !== label) { st8.dropAsk = label; UI.render(); return; } st8.dropAsk = null; fn(); } }, st8.dropAsk === label ? '本当に捨てる？' : label);
     if (sel.cons) {
-      const c = CONSUMABLES[sel.cons];
-      box.append(h('div', { class: 'd-name' }, `${c.name} ×${Inv.count(s, sel.cons)}`), h('div', { class: 'd-sub' }, c.desc + '（ダンジョンの「道具」から使えます）'));
+      const c = CONSUMABLES[sel.cons], n = Inv.count(s, sel.cons);
+      box.append(h('div', { class: 'd-name' }, `${c.name} ×${n}`), h('div', { class: 'd-sub' }, c.desc + (k.field ? '' : '（ダンジョンの「道具」から使えます）')));
+      const acts = h('div', { class: 'd-acts' });
+      if (k.field && n) acts.append(h('button', { class: 'ui-btn', onclick: () => { if (game.fieldUse && game.fieldUse(sel.cons)) { if (!Inv.count(s, sel.cons)) st8.sel = null; UI.render(); } } }, '使う'));
+      if (n) acts.append(dropBtn('1つ捨てる', () => { s.items[sel.cons]--; if (!s.items[sel.cons]) st8.sel = null; done('1つ捨てました'); }));
+      box.append(acts);
       return box;
     }
     const it = sel.uid != null ? Inv.byUid(s, sel.uid) : null;
@@ -287,6 +332,12 @@ const Town = {
     box.append(h('div', { class: 'd-name' }, [Inv.name(it), h('span', { class: 'd-rar' }, r.name)]),
       h('div', { class: 'd-sub' }, [k.basicText(it), ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join('')));
     const acts = h('div', { class: 'd-acts' });
+    if (k.field) {   // ダンジョンの中：装備の変更はできない（見る・捨てるだけ）
+      box.append(h('div', { class: 'd-sub' }, equipped ? '装備中（装備の変更は自宅で）' : '装備の変更は自宅でできます'));
+      if (!equipped) acts.append(dropBtn('捨てる', () => { Inv.remove(s, it.uid); st8.sel = null; done('捨てました'); }));
+      box.append(acts);
+      return box;
+    }
     if (equipped) {
       const sl = k.slotDefs.map(d => d[0]).find(x => k.slotUid(x) === it.uid);
       acts.append(h('button', { class: 'ui-btn ghost', onclick: () => { Inv.unequip(s, sl); st8.sel = { slot: sl, uid: null }; done(); } }, 'はずす'));
@@ -297,6 +348,7 @@ const Town = {
       box.append(h('div', { class: 'd-cmp' }, [`${k.slotDefs.find(d => d[0] === main)[1]}と比べると：`, k.diffText(main, it.uid)]));
       targets.forEach(x => acts.append(h('button', { class: 'ui-btn' + (x === main ? '' : ' ghost'), onclick: () => { Inv.equip(s, x, it.uid); st8.sel = { slot: x, uid: it.uid }; done(); } },
         targets.length > 1 ? `${k.slotDefs.find(d => d[0] === x)[1]}へ` : '装備する')));
+      acts.append(dropBtn('捨てる', () => { Inv.remove(s, it.uid); st8.sel = null; done('捨てました'); }));
     }
     box.append(acts);
     return box;
@@ -347,11 +399,15 @@ const Town = {
         el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, c.name), h('div', { class: 'sub' }, `${c.desc}（所持 ${have} / ${c.max}）`)]), h('div', { class: 'price' }, `${c.price} G`),
           h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= c.price; Inv.addItem(s, id, 1); this.save(game); Audio2.sfx('pickup'); UI.render(); } }, '買う')]));
       }
+      // 持ち物の枠を増やす（ふわもこ収納ポーチ）
+      { const n = Math.round((Inv.bagMax(s) - BAG_MAX) / BAG_EXPAND.step), price = BAG_EXPAND.prices[n];
+        el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, 'ふわもこ収納ポーチ'), h('div', { class: 'sub' }, price ? `持ち物の枠が ${BAG_EXPAND.step} つ増える（今 ${Inv.bagMax(s)} 枠）` : `これ以上は入らないみたい（${Inv.bagMax(s)} 枠）`)]), h('div', { class: 'price' }, price ? `${price} G` : '—'),
+          h('button', { class: 'ui-btn', disabled: !price || s.gold < price, onclick: () => { s.gold -= price; s.bagMax = Inv.bagMax(s) + BAG_EXPAND.step; this.save(game); Audio2.sfx('lvup'); UI.toast(`持ち物の枠が ${s.bagMax} になった！`); UI.render(); } }, '買う')])); }
       if (!s.shop) { this.restock(s); this.save(game); }
       el.append(h('div', { class: 'ui-h' }, '装備品（魔界から帰るたびに入れ替わります）'));
       if (!s.shop.items.length) el.append(h('div', { class: 'ui-note' }, '売り切れ。次の入荷をお待ちください。'));
       s.shop.items.forEach((it, i) => {
-        const b = Inv.base(it), r = Inv.rarity(it), price = Inv.buyPrice(it), can = s.gold >= price && s.bag.length < BAG_MAX;
+        const b = Inv.base(it), r = Inv.rarity(it), price = Inv.buyPrice(it), can = s.gold >= price && s.bag.length < Inv.bagMax(s);
         const basic = b.kind === 'weapon' ? `威力 ${b.atk}` : [b.def ? `防御 ${b.def}` : '', b.hp ? `HP +${b.hp}` : '', b.crit ? `会心 +${b.crit}%` : '', b.spd ? `移動 +${b.spd}%` : ''].filter(Boolean).join(' / ');
         el.append(h('div', { class: 'ui-row', style: { '--rc': r.color } }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, Inv.name(it)), h('div', { class: 'sub' }, [`${r.name}・${basic}`, ...it.affixes.map(a => ' / ' + Inv.affixText(a))].join(''))]), h('div', { class: 'price' }, `${price} G`),
           h('button', { class: 'ui-btn', disabled: !can, onclick: () => { s.gold -= price; s.shop.items.splice(i, 1); it.uid = s.uid++; it.isNew = true; Inv.add(s, it); this.save(game); Audio2.sfx('pickup'); UI.toast(`${b.name}を買いました（自宅で装備できます）`); UI.render(); } }, '買う')]));

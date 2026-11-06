@@ -13,7 +13,7 @@ const Save = {
       main: false,            // 本編（町）に入ったか
       gold: 0, uid: 1,
       bag: [],                // 装備品の個体データ
-      equip: { weapons: [null, null, null], armor: null, acc: [null, null] },  // bag の uid
+      equip: { weapons: [null, null, null], armor: null, acc: [null, null], partner: null },  // bag の uid
       items: {},              // 消耗品 { id: 個数 }
       dungeons: {},           // { grassland: { best: 0, checkpoint: 1, cleared: false } }
       hp: null,               // 町に戻った時の HP（null＝満タン）

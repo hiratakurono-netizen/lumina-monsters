@@ -96,26 +96,23 @@ const DungeonFlow = {
     this.returnToTown([L('narr', '目の前が暗くなって——気がつくと、町に戻っていた。'), L('sys', lost > 0 ? `拾ったゴールドの1/3（${lost} G）を失った。` : '失ったものはなかった。')]);
   },
 
-  // 戦闘中のアイテム（いちごミルク・お弁当・帰還の鈴）
-  openItemMenu() {
-    const W = this.world, P = W.player, s = this.save, h = UI.h;
-    const use = (id, fn) => () => { if (!Inv.useItem(s, id)) return; fn(); Save.store(s); Audio2.sfx('heal'); UI.render(); };
-    UI.open({ title: 'アイテム', tabs: [{ label: '', render: el => {
-      const rows = [
-        ['milk', `HP +40（今 ${Math.ceil(P.hp)} / ${P.maxHp}）`, use('milk', () => { P.hp = Math.min(P.maxHp, P.hp + 40); W.floatText(P.x, P.y - 130, 'HP +40', '#8fe0a0', 16); })],
-        ['bento', 'HPを全回復', use('bento', () => { P.hp = P.maxHp; W.floatText(P.x, P.y - 130, 'HP 全回復', '#8fe0a0', 16); })],
-        ['water', this.world.ch.env === 'heat' ? `水分を満タンに（今 ${Math.round(this.run.water)}%）` : '砂漠で水分を回復する', () => { if (!Inv.useItem(s, 'water')) return; this.run.water = 100; this.run.heat = 0; Save.store(s); Audio2.sfx('heal'); W.floatText(P.x, P.y - 130, '水分 100%', '#9fe0ff', 16); UI.render(); }],
-        ['cooler', this.world.ch.env === 'lava' ? `残り時間を30秒のばす（今 ${Math.ceil(this.run.timeLeft)}秒）` : '火山の残り時間をのばす', () => { if (!Inv.useItem(s, 'cooler')) return; if (this.run.timeLeft != null) this.run.timeLeft += 30; Save.store(s); Audio2.sfx('heal'); W.floatText(P.x, P.y - 130, '+30秒', '#9fe0ff', 16); UI.render(); }],
-        ['power', this.run.power ? '使用中（攻撃力 +20%）' : 'この潜入の間、攻撃力 +20%', () => { if (this.run.power || !Inv.useItem(s, 'power')) return; this.run.power = true; P.stats.atkPct += 20; Save.store(s); Audio2.sfx('lvup'); W.floatText(P.x, P.y - 130, '攻撃力 +20%', '#ffb35a', 16); UI.render(); }],
-        ['bell', '町へ帰る（ゴールドは失わない）', () => { if (!Inv.useItem(s, 'bell')) return; this.keepHero(W); UI.close(); this.returnToTown([L('sys', '帰還の鈴が鳴り、町へ戻った。')]); }],
-      ];
-      for (const [id, desc, fn] of rows) {
-        const n = Inv.count(s, id);
-        el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, `${CONSUMABLES[id].name} ×${n}`), h('div', { class: 'sub' }, desc)]),
-          h('button', { class: 'ui-btn', disabled: !n, onclick: fn }, '使う')]));
-      }
-      el.append(h('div', { class: 'ui-note' }, 'アイテムはコンビニで買えます。'));
-    } }] });
+  // 戦闘中の「道具」：自宅の持ち物画面と同じ画面（装備の変更はできない。道具を使う・捨てるはできる）
+  openItemMenu() { Town.openHome(this, { field: true }); },
+  // 道具を使う。使えたら true
+  fieldUse(id) {
+    const W = this.world, P = W.player, s = this.save, run = this.run;
+    const fx = (t, c) => { Save.store(s); Audio2.sfx('heal'); W.floatText(P.x, P.y - 130, t, c, 16); return true; };
+    if (id === 'water' && W.ch.env !== 'heat') { UI.toast('砂漠で使う道具です'); return false; }
+    if (id === 'cooler' && run.timeLeft == null) { UI.toast('火山で使う道具です'); return false; }
+    if (id === 'power' && run.power) { UI.toast('もう使っています'); return false; }
+    if (!Inv.useItem(s, id)) return false;
+    if (id === 'milk') { P.hp = Math.min(P.maxHp, P.hp + 40); return fx('HP +40', '#8fe0a0'); }
+    if (id === 'bento') { P.hp = P.maxHp; return fx('HP 全回復', '#8fe0a0'); }
+    if (id === 'water') { run.water = 100; run.heat = 0; return fx('水分 100%', '#9fe0ff'); }
+    if (id === 'cooler') { run.timeLeft += 30; return fx('+30秒', '#9fe0ff'); }
+    if (id === 'power') { run.power = true; P.stats.atkPct += 20; Audio2.sfx('lvup'); return fx('攻撃力 +20%', '#ffb35a'); }
+    if (id === 'bell') { this.keepHero(W); Save.store(s); UI.close(); this.returnToTown([L('sys', '帰還の鈴が鳴り、町へ戻った。')]); return true; }
+    return false;
   },
 };
 Object.assign(Game, DungeonFlow);

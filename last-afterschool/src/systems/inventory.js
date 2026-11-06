@@ -1,7 +1,8 @@
 // =====================================================================
 //  所持品・装備・ゴールド（セーブデータ s を直接操作する小さな関数群）
 // =====================================================================
-const BAG_MAX = 30;   // 装備品の所持上限（仮）
+const BAG_MAX = 30;   // 装備品の所持上限（はじめ）。コンビニの「収納ポーチ」で増える（s.bagMax）
+const BAG_EXPAND = { step: 5, prices: [300, 600, 1000, 1600, 2500, 4000] };   // 1回で+5枠、最大6回（60枠）
 
 const Inv = {
   base(it) { return ITEM_BASES[it.base]; },
@@ -22,13 +23,14 @@ const Inv = {
     }
     return { uid: s.uid++, base: baseId, rarity: r.id, plus: 0, affixes };
   },
+  bagMax(s) { return s.bagMax || BAG_MAX; },
   add(s, it) {
-    if (s.bag.length >= BAG_MAX) return false;
+    if (s.bag.length >= this.bagMax(s)) return false;
     if (!it.uid) it.uid = s.uid++;
     s.bag.push(it); return true;
   },
   byUid(s, uid) { return s.bag.find(i => i.uid === uid) || null; },
-  isEquipped(s, uid) { const e = s.equip; return e.weapons.includes(uid) || e.armor === uid || e.acc.includes(uid); },
+  isEquipped(s, uid) { const e = s.equip; return e.weapons.includes(uid) || e.armor === uid || e.acc.includes(uid) || (e.partner != null && e.partner === uid); },
   // 装備する：slot は 'weapon:0' / 'armor' / 'acc:1' など
   equip(s, slot, uid) {
     const [kind, idx] = slot.split(':');
@@ -36,13 +38,15 @@ const Inv = {
     s.equip.weapons = s.equip.weapons.map(u => (u === uid ? null : u));
     s.equip.acc = s.equip.acc.map(u => (u === uid ? null : u));
     if (s.equip.armor === uid) s.equip.armor = null;
-    if (kind === 'weapon') s.equip.weapons[+idx] = uid;
+    if (s.equip.partner === uid) s.equip.partner = null;
+    if (kind === 'partner') s.equip.partner = uid;   // ルゥに持たせる武器
+    else if (kind === 'weapon') s.equip.weapons[+idx] = uid;
     else if (kind === 'acc') s.equip.acc[+idx] = uid;
     else s.equip.armor = uid;
   },
   unequip(s, slot) {
     const [kind, idx] = slot.split(':');
-    if (kind === 'weapon') s.equip.weapons[+idx] = null; else if (kind === 'acc') s.equip.acc[+idx] = null; else s.equip.armor = null;
+    if (kind === 'partner') s.equip.partner = null; else if (kind === 'weapon') s.equip.weapons[+idx] = null; else if (kind === 'acc') s.equip.acc[+idx] = null; else s.equip.armor = null;
   },
   remove(s, uid) {
     if (this.isEquipped(s, uid)) return false;

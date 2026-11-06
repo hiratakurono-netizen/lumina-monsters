@@ -388,21 +388,97 @@ class Player {
 // =====================================================================
 //  Partner（肩に乗る小さな相棒）
 // =====================================================================
+// ルゥに持たせた武器の種類ごとの素早さ・体力（label は画面表示用）
+const PARTNER_TYPES = {
+  bat:    { spd: 1.0,  hp: 1.0,  label: ['ふつう', 'ふつう'] },
+  chair:  { spd: 0.85, hp: 1.25, label: ['やや遅い', 'やや高い'] },
+  desk:   { spd: 0.65, hp: 1.6,  label: ['遅い', '高い'] },
+  dagger: { spd: 1.45, hp: 0.7,  label: ['とても速い', '低い'] },
+  sword:  { spd: 1.15, hp: 0.95, label: ['速い', 'ふつう'] },
+  axe:    { spd: 0.8,  hp: 1.35, label: ['遅め', '高め'] },
+};
+// 相棒ルゥ。本編のダンジョンで武器を持たせていると、近くの敵に突進して戦う。体力が尽きると定位置で休む
 class Partner {
-  constructor(p) { this.p = p; this.x = p.x; this.y = p.y - 130; this.t = 0; this.glow = 0; }
+  constructor(p) {
+    this.p = p; this.x = p.x; this.y = p.y - 130; this.t = 0; this.glow = 0; this.state = 'follow'; this.cd = 1.5; this.ang = 0;
+    this.wpn = null;
+    const W = p.w, s = W.game && W.game.save;
+    if (W.ch.dungeon && s && s.equip && s.equip.partner != null && typeof Stats !== 'undefined') {
+      const w = Stats.weapon(s, s.equip.partner);
+      if (w) {
+        const T = PARTNER_TYPES[w.type] || PARTNER_TYPES.bat;
+        this.wpn = w; this.T = T; this.maxHp = this.hp = Math.round(Stats.calc(s).maxHp * 0.6 * T.hp);
+      }
+    }
+  }
+  home() { return [this.p.x - this.p.face * 40, this.p.y - 140 + Math.sin(this.t * 3) * 6]; }
   update(dt) {
     this.t += dt; this.glow = Math.max(0, this.glow - dt);
-    const tx = this.p.x - this.p.face * 40, ty = this.p.y - 140 + Math.sin(this.t * 3) * 6;
-    this.x += (tx - this.x) * Math.min(1, dt * 6); this.y += (ty - this.y) * Math.min(1, dt * 6);
+    const [hx, hy] = this.home(), W = this.p.w;
+    const fight = this.wpn && W.state === 'play' && !W.dialogue;
+    if (this.state === 'charge' && fight) {
+      const e = this.target;
+      if (!e || e.dead || e.dying > 0 || this.st > 1.6) { this.state = 'back'; }
+      else {
+        const tx = e.x, ty = e.y - e.d.h * 0.5, dx = tx - this.x, dy = ty - this.y, l = Math.hypot(dx, dy) || 1, v = 640 * this.T.spd;
+        this.ang = Math.atan2(dy, dx); this.x += dx / l * v * dt; this.y += dy / l * v * dt; this.st += dt;
+        if (Math.random() < 0.6) W.fx.push(new Particle({ x: this.x, y: this.y - 18, life: 0.25, size: 5, color: '#e6dcff', add: true }));
+        if (l < 30 + e.d.w * 0.3) this.strike(e);
+      }
+    } else if (this.state === 'back' || this.state === 'rest' || this.state === 'follow' || !fight) {
+      const k = this.state === 'back' ? 8 : 6;
+      this.x += (hx - this.x) * Math.min(1, dt * k); this.y += (hy - this.y) * Math.min(1, dt * k);
+      if (this.state === 'back' && Math.hypot(hx - this.x, hy - this.y) < 30) this.state = 'follow';
+      if (this.state === 'rest') { this.hp = Math.min(this.maxHp, this.hp + this.maxHp / 12 * dt); if (this.hp >= this.maxHp) { this.state = 'follow'; W.floatText(this.x, this.y - 50, `${NAMES.partner} 復活！`, '#e6dcff', 14); } }
+      if (fight && this.state === 'follow') {
+        this.cd -= dt;
+        if (this.cd <= 0) {   // 主人公の近くの、起きている敵をねらう
+          let best = null, bd = 430;
+          for (const e of W.enemies) {
+            if (e.dying > 0 || e.spawnT > 0.2 || e.awake === false || e.alpha < 0.5 || e.phased || e.entering) continue;
+            const d = Math.abs(e.x - this.p.x); if (d < bd) { bd = d; best = e; }
+          }
+          if (best) { this.state = 'charge'; this.target = best; this.st = 0; } else this.cd = 0.3;
+        }
+      }
+    }
+  }
+  // 体当たり：武器の威力で与えるダメージが決まる（遅い武器ほど一撃が重い）。敵の防御も差し引く
+  strike(e) {
+    const W = this.p.w, P = this.p, w = this.wpn;
+    const raw = 15 * 1.3 * w.powerMul * (1 + w.atkPct / 100) * (1 + (P.lv - 1) * BAL.LV_ATK) * Math.pow(1 / this.T.spd, 0.6) * rand(0.9, 1.1);
+    const dmg = Math.max(1, Math.round(BAL.applyDef(raw, e.def)));
+    e.damage(dmg, this.x); if (!e.boss) { e.vx += Math.sign(e.x - this.x) * 160; e.stun = Math.max(e.stun, 0.15); } else e.poise = (e.poise || 0) + dmg * 0.5;
+    if (w.element && w.element !== 'none' && ELEMENTS[w.element]) W.spark(e.x, e.y - e.d.h * 0.5, ELEMENTS[w.element].color, 8);
+    W.spark(this.x, this.y - 18, '#ffffff', 8); Audio2.sfx('kick'); this.glow = 0.4;
+    // 反撃：敵の攻撃力の半分を受ける
+    const c = (e.contactDmg !== undefined ? e.contactDmg : e.d.dmg) * (e.dmgK || 1) * (W.ch.dmgMul || 1) * 0.5;
+    if (c > 0) { this.hp -= c; W.floatText(this.x, this.y - 40, '-' + Math.round(c), '#ffb0c8', 12); }
+    if (this.hp <= 0) { this.hp = 0; this.state = 'rest'; W.floatText(this.x, this.y - 50, `${NAMES.partner}はひと休み…`, '#d8ccff', 14); }
+    else { this.state = 'back'; this.cd = 1.4 / this.T.spd; }
   }
   draw(ctx, cam) {
-    const x = this.x - cam, y = this.y;
+    const x = this.x - cam, y = this.y, rest = this.state === 'rest';
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     const r = 26 + this.glow * 40 + Math.sin(this.t * 4) * 2;
     const g = ctx.createRadialGradient(x, y - 18, 2, x, y - 18, r);
-    g.addColorStop(0, 'rgba(255,250,230,.45)'); g.addColorStop(1, 'rgba(255,240,255,0)');
+    g.addColorStop(0, rest ? 'rgba(180,170,220,.25)' : 'rgba(255,250,230,.45)'); g.addColorStop(1, 'rgba(255,240,255,0)');
     ctx.fillStyle = g; ctx.fillRect(x - r, y - 18 - r, r * 2, r * 2); ctx.restore();
-    drawMon(ctx, 'wyrmling', x, y, 0.4, this.p.face > 0, 1, 1 + Math.sin(this.t * 6) * 0.03);
+    ctx.save(); if (rest) ctx.globalAlpha = 0.6;
+    const flip = this.state === 'charge' ? Math.cos(this.ang) > 0 : this.p.face > 0;
+    drawMon(ctx, 'wyrmling', x, y, 0.4, flip, 1, 1 + Math.sin(this.t * 6) * 0.03, this.state === 'charge' ? Math.sin(this.ang) * 0.4 * (flip ? 1 : -1) : 0);
+    // 持っている武器（小さく）
+    if (this.wpn) {
+      const A = WEAPON_ART[this.wpn.type], im = A && IMG[A.file];
+      if (im && im.width) { ctx.save(); ctx.translate(x + (flip ? 18 : -18), y - 20); ctx.rotate((flip ? 1 : -1) * (this.state === 'charge' ? 1.3 : 0.5)); const sc = 0.45; ctx.drawImage(im, -im.width * sc / 2, -im.height * sc / 2, im.width * sc, im.height * sc); ctx.restore(); }
+    }
+    ctx.restore();
+    if (this.wpn) {   // 体力のバー
+      const k = this.hp / this.maxHp;
+      ctx.fillStyle = 'rgba(10,0,20,.6)'; ctx.fillRect(x - 22, y - 58, 44, 5);
+      ctx.fillStyle = rest ? '#8a80b0' : k > 0.3 ? '#9fe0a0' : '#ff8a9a'; ctx.fillRect(x - 22, y - 58, 44 * k, 5);
+      if (rest) { ctx.font = `14px ${FONT}`; ctx.fillStyle = '#d8ccff'; ctx.fillText('z', x + 18, y - 52 - (this.t * 20 % 12)); ctx.fillText('Z', x + 26, y - 64 - (this.t * 14 % 12)); }
+    }
   }
 }
 
@@ -669,7 +745,7 @@ const AI = {
         if (e.next === 'dash') e.face = e.dir;
         if (e.st <= 0) {
           if (e.next === 'summon') {
-            for (const side of [1, -1]) { const m = W.makeEnemy(e.d.minion || 'wolf', side > 0 ? hi : lo, undefined, W.ch.foeScale || { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; W.enemies.push(m); }
+            for (const side of [1, -1]) { const m = W.makeEnemy(e.d.minion || 'wolf', side > 0 ? hi : lo, undefined, W.ch.foeScale || { hpMul: 1 + 0.14 * ((W.ch.floor || 1) - 1), dmgMul: e.dmgMul }); m.vx = -side * 120; m.summoned = true; W.enemies.push(m); }
             e.state = 'move'; e.cool = 1.5;
           } else { e.state = 'dash'; e.st = 1.6; }
         }
@@ -697,7 +773,7 @@ const AI = {
       for (let i = -2; i <= 2; i++) W.addProj(new DarkOrb(W, e.x, e.y - e.d.h * 0.6, Math.atan2(P.y - 60 - (e.y - e.d.h * 0.6), P.x - e.x) + i * 0.22, 0.5));
       if (!e.called || W.enemies.filter(x => x.type === 'royal_guard').length === 0 && Math.random() < 0.35) {
         e.called = true;
-        for (const side of [1, -1]) { const lo = W.camLock ? W.camLock.min + 90 : 90, hi = W.camLock ? W.camLock.max + VIEW_W - 90 : W.ch.length - 90; const m = W.makeEnemy('royal_guard', side > 0 ? hi : lo, undefined, W.ch.foeScale || { hpMul: 2 }); m.vx = -side * 120; W.enemies.push(m); }
+        for (const side of [1, -1]) { const lo = W.camLock ? W.camLock.min + 90 : 90, hi = W.camLock ? W.camLock.max + VIEW_W - 90 : W.ch.length - 90; const m = W.makeEnemy('royal_guard', side > 0 ? hi : lo, undefined, W.ch.foeScale || { hpMul: 2 }); m.vx = -side * 120; m.summoned = true; W.enemies.push(m); }
       }
       return;
     }

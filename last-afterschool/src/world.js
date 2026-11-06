@@ -260,6 +260,8 @@ class World {
   }
   killEnemy(e) {
     if (e.dying > 0) return;
+    // ボスを倒すと、ボスが呼んだ子分も一緒に倒れる（落とし物なし）
+    if (e.boss) { e.dying = 0.01; for (const m of this.enemies) if (m.summoned && m.dying <= 0 && !m.dead) { m.noDrop = true; this.killEnemy(m); } e.dying = 0; }
     e.dying = e.boss ? 2.2 : 0.45; e.vx = 0; Audio2.sfx('die');
     this.spark(e.x, e.y - e.d.h / 2, '#e8d8ff', 14);
     const fl = this.ch.dungeon ? this.ch.depth || this.ch.floor : 1;   // 深さ（草原1〜10・砂漠11〜20…）
@@ -271,13 +273,13 @@ class World {
       const rng = makeRng((Math.random() * 4294967296) >>> 0), save = this.game.save;
       if (e.boss) LOOT.bossDrops(save, rng, fl, this.ch.floor, this.ch.dungeonId).forEach((it, i, a) => this.dropItem(e.x + (i - (a.length - 1) / 2) * 60, e.y - 60, it));
       else if (e.elite) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl + 1, { minTier: 1 }));
-      else if (rng.chance(LOOT.ENEMY_ITEM_CHANCE)) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl));
+      else if (!e.noDrop && rng.chance(LOOT.ENEMY_ITEM_CHANCE)) this.dropItem(e.x, e.y - 40, LOOT.roll(save, rng, fl));
     }
     if (!e.boss && Math.random() < 0.13) this.pickups.push({ x: e.x, y: e.y - 40, vy: -260, t: 0, kind: 'milk' });
     if (e.boss) {
       this.slowmo = 1.8; this.flash = 1; this.shake = 24; Audio2.sfx('slam');
       for (let i = 0; i < 60; i++) this.fx.push(new Particle({ x: e.x + rand(-90, 90), y: e.y - rand(0, 180), vx: rand(-300, 300), vy: rand(-500, -100), g: 900, life: rand(0.8, 1.6), size: rand(6, 14), color: ['#7d7488', '#a49ab0', '#5d556a'][i % 3] }));
-      this.projs = [];
+      this.projs = []; this.spawnQ = [];
       setTimeout(() => { this.wave = null; this.boss = null; if (this.ch.dungeon) { this.camLock = null; this.bossDefeated = true; this.goArrow = 3; if (this.ch.bossPost) this.say(this.ch.bossPost, () => { if (this.ch.dungeonId === 'castle') { this.exitUsed = true; this.game.floorCleared(this); } }); } else this.finish(); }, 2600);   // 10階ボス：倒した後の会話（魔王はそのままエンディングへ）
     }
   }
