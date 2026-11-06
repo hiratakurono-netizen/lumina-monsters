@@ -18,6 +18,72 @@ function drawHero(ctx, anim, i, x, y, face, scale) {
   ctx.drawImage(img, f.x, f.y, f.w, f.h, -f.ax * scale, -f.ay * scale, f.w * scale, f.h * scale);
   ctx.restore();
 }
+// ---------------------------------------------------------------------
+//  主人公を背景のドット絵になじませる描き方（見た目だけ。サイズ・動き・判定は変えない）
+//  1) 一度小さなキャンバスに縮小して描き（PX ゲーム座標あたり1ドット）、拡大は補間なし → 背景に近いドットの粗さ（顔が潰れない程度）
+//  2) 半透明のふちを切りそろえ、外周のドットを少し暗くする → ぼやけた輪郭をドット絵の輪郭に
+//  3) 白の明るさを少し抑え、背景ごとの色味（HERO_TINT）を薄く混ぜる → 背景の色調になじむ
+//  コマ×背景ごとに作った絵をキャッシュするので、毎フレームの負担は drawImage 1回だけ
+// ---------------------------------------------------------------------
+const HERO_LOOK = { PX: 1.0, edgeDark: 0.7, white: 0.92, contrast: 1.12 };
+// 背景ごとの色味 [r, g, b, 混ぜる割合, 明るさ]
+const HERO_TINT = {
+  street: [255, 214, 222, 0.05, 1.0], schoolyard: [255, 200, 170, 0.06, 0.98], corridor: [120, 110, 150, 0.08, 0.95], homeec: [140, 120, 140, 0.08, 0.94],
+  rooftop: [200, 90, 110, 0.1, 0.94], rooftop_calm: [200, 120, 150, 0.08, 0.96], town: [150, 110, 170, 0.08, 0.95],
+  grassland: [70, 80, 150, 0.12, 0.92], desert: [230, 160, 90, 0.08, 0.97], snow: [160, 200, 240, 0.08, 0.98],
+  volcano: [190, 80, 50, 0.12, 0.9], castle_out: [90, 70, 130, 0.14, 0.9], castle_in: [70, 50, 90, 0.16, 0.88],
+};
+const HeroLook = {
+  cache: new Map(),
+  get(anim, i, bg) {
+    const key = anim + '|' + i + '|' + bg;
+    if (this.cache.has(key)) return this.cache.get(key);
+    const set = spriteSet(anim), [img, f] = heroFrame(anim, i);
+    if (!img || !img.width) return null;
+    const scale = set.scale || HERO_SCALE * (ANIM_SCALE[anim] || 1), k = scale / HERO_LOOK.PX;
+    const w = Math.max(1, Math.ceil(f.w * k)), h = Math.max(1, Math.ceil(f.h * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';   // 縮小は平均をとって細部（顔・髪）を残す
+    x.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, w, h);
+    try {
+      const d = x.getImageData(0, 0, w, h), p = d.data, T = HERO_TINT[bg] || HERO_TINT.town, solid = new Uint8Array(w * h);
+      // 背景の色味を「乗算」で薄くかける（色の強さ T[3]×1.6、明るさ T[4]）
+      const mx = Math.max(T[0], T[1], T[2]), am = T[3] * 1.6;
+      const tr = (1 - am + am * T[0] / mx) * T[4], tg = (1 - am + am * T[1] / mx) * T[4], tb = (1 - am + am * T[2] / mx) * T[4];
+      for (let n = 0; n < w * h; n++) solid[n] = p[n * 4 + 3] >= 110 ? 1 : 0;
+      for (let y = 0; y < h; y++) for (let xx = 0; xx < w; xx++) {
+        const n = y * w + xx, o = n * 4;
+        if (!solid[n]) { p[o + 3] = 0; continue; }
+        p[o + 3] = 255;
+        let r = p[o], g = p[o + 1], b = p[o + 2];
+        // 白（明るい所）を少しだけ抑える
+        const L = (r + g + b) / 3; if (L > 190) { const s = 1 - (1 - HERO_LOOK.white) * (L - 190) / 65; r *= s; g *= s; b *= s; }
+        // 背景の色味を薄く混ぜ、明るさを合わせる
+        r *= tr; g *= tg; b *= tb;   // 乗算なので暗い所（輪郭・影）は暗いまま＝コントラストを保つ
+        // 縮小で薄くなった線を少し締める（コントラストを少し上げる）
+        const C = HERO_LOOK.contrast; r = (r - 128) * C + 128; g = (g - 128) * C + 128; b = (b - 128) * C + 128;
+        // 外周のドットは少し暗く（ドット絵の輪郭線）
+        const edge = xx === 0 || y === 0 || xx === w - 1 || y === h - 1 || !solid[n - 1] || !solid[n + 1] || !solid[n - w] || !solid[n + w];
+        if (edge) { r *= HERO_LOOK.edgeDark; g *= HERO_LOOK.edgeDark; b *= HERO_LOOK.edgeDark; }
+        p[o] = r; p[o + 1] = g; p[o + 2] = b;
+      }
+      x.putImageData(d, 0, 0);
+    } catch (e) {}   // 読み出せない環境ではそのまま（縮小のドット感だけ）
+    const out = { c, ax: f.ax * k, ay: f.ay * k };
+    this.cache.set(key, out);
+    return out;
+  },
+  // drawHero と同じ位置・大きさで描く
+  draw(ctx, anim, i, x, y, face, bg) {
+    const L = HERO_LOOK.off ? null : this.get(anim, i, bg);   // HERO_LOOK.off＝比較用に元の描き方
+    if (!L) return drawHero(ctx, anim, i, x, y, face);
+    const P = HERO_LOOK.PX;
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(Math.round(x), Math.round(y)); if (face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(L.c, -L.ax * P, -L.ay * P, L.c.width * P, L.c.height * P);
+    ctx.restore();
+  },
+};
 function drawMon(ctx, spr, x, y, scale, flip, sx = 1, sy = 1, rot = 0) {
   const m = SPRITE_DATA.monsters[spr], img = IMG[m.img];
   const w = m.w * scale * sx, h = m.h * scale * sy;
@@ -299,15 +365,17 @@ class Player {
   }
   draw(ctx, cam) {
     const blink = this.inv > 0 && this.state !== 'attack' && this.state !== 'dodge' && Math.floor(this.inv * 20) % 2 === 0;
-    // 影
-    ctx.fillStyle = 'rgba(10,0,20,.35)'; ctx.beginPath();
+    // 接地影：外側の淡い影＋足元の濃い影。空中では高さに応じて小さく薄くなる
     const sg = this.w.terrain.groundBelow(this.x, this.y, 12);
-    if (sg < Infinity) ctx.ellipse(this.x - cam, sg + 2, 34 * Math.max(0.3, 1 - (sg - this.y) / 600), 7, 0, 0, 7);
-    ctx.fill();
+    if (sg < Infinity) {
+      const k = Math.max(0.25, 1 - (sg - this.y) / 420), sx = this.x - cam;
+      ctx.fillStyle = `rgba(10,0,20,${0.22 * k})`; ctx.beginPath(); ctx.ellipse(sx, sg + 1, 36 * k, 7 * k, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = `rgba(10,0,20,${0.3 * k * k})`; ctx.beginPath(); ctx.ellipse(sx, sg + 1, 18 * k, 3.5 * k, 0, 0, 7); ctx.fill();
+    }
     // 回避の残像
     for (const g of this.ghosts) {
       ctx.globalAlpha = 0.4 * (1 - g.t / 0.3);
-      drawHero(ctx, g.anim, g.frame, g.x - cam, g.y, g.face);
+      HeroLook.draw(ctx, g.anim, g.frame, g.x - cam, g.y, g.face, this.w.ch.bg);
     }
     if (blink) ctx.globalAlpha = 0.35;
     if (this.atk && this.atk.special) { // 必殺中のオーラ
@@ -317,7 +385,7 @@ class Player {
       g.addColorStop(0, el.color); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g;
       ctx.fillRect(this.x - cam - 130, this.y - 190, 260, 220); ctx.restore();
     }
-    drawHero(ctx, this.anim, this.frame, this.x - cam, this.y, this.face);
+    HeroLook.draw(ctx, this.anim, this.frame, this.x - cam, this.y, this.face, this.w.ch.bg);   // 背景になじむ描き方
     ctx.globalAlpha = 1;
     this.drawOverlayWeapon(ctx, cam);
     if (this.guarding) this.drawGuard(ctx, cam);
