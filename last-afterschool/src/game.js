@@ -228,6 +228,7 @@ const Game = {
     }
     this.fade = Math.max(0, this.fade - dt * 1.6);
     const S = this['u_' + this.scene]; if (S) S.call(this, dt);
+    document.body.classList.toggle('title-scene', this.scene === 'title' && !this.sub);
     document.body.classList.toggle('town', (this.scene === 'play' || this.scene === 'card') && !!(this.world && this.world.ch.town));
     document.body.classList.toggle('dungeon', this.scene === 'play' && !!(this.world && this.world.ch.dungeon));
     this.tapAt = null;

@@ -110,6 +110,11 @@
   .tile.on { outline: 3px solid #ffe27a; outline-offset: 1px; }
   .tile.dim { opacity: .35; }
   .tile.empty { border-style: dashed; }
+  #newtab { display: none; position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 30; padding: 8px 14px; font: 14px DotGothic16, monospace; color: #fff6ff; background: rgba(40,28,80,.9); border: 2px solid #b9a2ff; border-radius: 10px; line-height: 1.3; }
+  #newtab small { display: block; font-size: 11px; color: #cdbfff; }
+  body.title-scene #newtab { display: block; }
+  .detail .d-acts .ui-btn { white-space: nowrap; }
+  .d-name { word-break: normal; overflow-wrap: anywhere; }
   .tile.picked { outline: 3px solid #ff7a8a; outline-offset: 1px; }
   .tile.picked::after { content: '✓'; position: absolute; right: 2px; top: 0; font-size: 14px; color: #ff9aa8; text-shadow: 0 0 3px #000; }
   .inv-bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
@@ -188,6 +193,8 @@
   .detail > :not(.d-acts) { grid-column: 1 / -1; }
   .detail > .d-name { grid-column: 1; align-self: center; }
   .detail .d-acts { grid-column: 2; grid-row: 1; flex-direction: row; flex-wrap: nowrap; margin: 0; }
+  .detail.many > .d-name { grid-column: 1 / -1; }
+  .detail .d-acts.many { grid-column: 1 / -1; grid-row: auto; flex-wrap: wrap; }
   .doll { grid-template-columns: 40px minmax(0, 1fr) 40px; grid-template-rows: repeat(3, 40px); gap: 4px 8px; }
   .doll .tile { width: 40px; height: 40px; }
   .detail .ui-btn { min-width: 0; padding: 0 8px; }
@@ -197,6 +204,7 @@
   .tile img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; }
 </style>
 <div id="wrap"><canvas id="game" width="1920" height="1080"></canvas></div>
+<button id="newtab" type="button">新しいタブで開く<small>（セーブを引き継ぐ）</small></button>
 <div id="touch" aria-hidden="true">
   <div class="btn" data-btn="left">◀</div>
   <div class="btn" data-btn="right">▶</div>
@@ -236,5 +244,12 @@
 <script src="src/dungeon/run.js"></script>
 <script src="src/story/main_story.js"></script>
 <script src="src/dev/test_rooms.js"></script>
+<script>
+document.getElementById('newtab').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!Save.openInNewTab(Game.save)) UI.toast('開けませんでした。ポップアップを許可するか、Safariで開いてください');
+});
+['pointerdown', 'touchstart', 'mousedown'].forEach(t => document.getElementById('newtab').addEventListener(t, e => e.stopPropagation(), { passive: true }));
+</script>
 </body>
 </html>

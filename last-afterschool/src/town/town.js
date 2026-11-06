@@ -350,6 +350,7 @@ const Town = {
         targets.length > 1 ? `${k.slotDefs.find(d => d[0] === x)[1]}へ` : '装備する')));
       acts.append(dropBtn('捨てる', () => { Inv.remove(s, it.uid); st8.sel = null; done('捨てました'); }));
     }
+    if (acts.children.length > 2) { acts.classList.add('many'); box.classList.add('many'); }   // ボタンが多い時は名前の下の行へ（名前が縦に潰れないように）
     box.append(acts);
     return box;
   },

@@ -40,4 +40,23 @@ const Save = {
     if (!s.startsWith('LA2:')) throw new Error('セーブデータの文字列ではありません');
     return this.migrate(JSON.parse(decodeURIComponent(escape(atob(s.slice(4))))));
   },
+  // 「新しいタブで開く」：今のセーブを URL の # に付けて新しいタブで開く。
+  // 開いた側は起動時に # から読み込んで自分の保存領域に保存し、# を消す（アプリ内ブラウザ・iframe でセーブが残らない対策）
+  openInNewTab(d) {
+    const url = location.href.split('#')[0] + '#la2=' + encodeURIComponent(this.exportCode(d));
+    let w = null; try { w = window.open(url, '_blank'); } catch (e) {}
+    return !!w;
+  },
+  fromHash() {
+    try {
+      const m = location.hash.match(/^#la2=(.+)$/); if (!m) return;
+      const d = this.importCode(decodeURIComponent(m[1]));
+      const cur = this.load();
+      // 引き継ぐ側のほうが進んでいる時だけ上書き（新しいタブに古いデータが来ても消さない）
+      const prog = x => (x.main ? 1000 : 0) + (x.unlocked || 0) * 10 + Object.values(x.dungeons || {}).reduce((a, v) => a + (v.best || 0), 0) + (x.lv || 0);
+      if (!cur || prog(d) >= prog(cur)) this.store(d);
+      history.replaceState(null, '', location.href.split('#')[0]);
+    } catch (e) {}
+  },
 };
+Save.fromHash();
