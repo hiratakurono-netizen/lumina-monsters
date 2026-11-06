@@ -155,11 +155,21 @@ class World {
     }
   }
   queueWave(list) { list.forEach(([type, side], i) => this.spawnQ.push({ type, side, t: i === 0 ? 0.2 : 0.35 })); }
+  // ウェーブの敵：画面の外から、ステージの中央めがけて跳び込んでくる（飛ぶ敵は飛んで入ってくる）
   spawn(type, side) {
     const d = ENEMIES[type];
-    const x = side > 0 ? this.camX + VIEW_W + 20 : this.camX - 20;
+    const mid = this.camLock ? (this.camLock.min + this.camLock.max) / 2 + VIEW_W / 2 : this.camX + VIEW_W / 2;   // 戦闘エリアの中央
+    const x = side > 0 ? Math.max(this.camX + VIEW_W, mid + VIEW_W / 2) + 60 : Math.min(this.camX, mid - VIEW_W / 2) - 60;
     const e = this.makeEnemy(type, x, d.fly ? GROUND_Y - 180 - rand(0, 60) : undefined, this.wave && this.wave.ev);
-    e.vx = -side * 120; e.fromWave = true; this.enemies.push(e);
+    e.fromWave = true;
+    if (d.fly || d.boss) e.vx = -side * 120;
+    else {
+      const tx = mid + rand(-170, 170), T = rand(0.85, 1.05), gy = this.terrain.groundBelow(tx, -999, 0);
+      e.y = Math.min(e.y, GROUND_Y);
+      const drop = Math.max(0, (gy < Infinity ? gy : GROUND_Y) - e.y), vy0 = 1900 * T / 2 + 120, tFlight = (vy0 + Math.sqrt(vy0 * vy0 + 2 * 1900 * drop)) / 1900;
+      e.vy = -vy0; e.vx = (tx - x) / tFlight; e.onGround = false; e.entering = true; e.spawnT = 0;
+    }
+    this.enemies.push(e);
   }
   // 敵を作る。y を省くとその下の地面に立たせる。scale.hpMul / dmgMul で深い階ほど強く
   makeEnemy(type, x, y, scale) {
@@ -193,6 +203,7 @@ class World {
     }
     if (this.objs && this.objs.length) this.hitObjs(box);
     if (this.feats) Gimmicks.hit(this, box, el, atk.special);
+    for (const pr of this.projs) if (pr.reflectable && !pr.dead && overlap(box, pr.box())) { pr.dead = true; this.spark(pr.x, pr.y, '#ffffff', 10); this.floatText(pr.x, pr.y - 20, '打ち消した！', '#bfe9ff', 13); Audio2.sfx('blip'); }
     let any = false;
     const lvMul = 1 + (P.lv - 1) * (this.ch.dungeon ? BAL.LV_ATK : 0.08), spMul = atk.special ? SPECIAL.dmgMul : 1;
     for (const e of this.enemies) {

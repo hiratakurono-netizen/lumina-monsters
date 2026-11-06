@@ -17,7 +17,10 @@ const BAL = {
   LV_HP: 6,                    // レベル1つあたりの最大HPの伸び
   RARITY_MUL: [1, 1.1, 1.22, 1.36, 1.5],
 
-  tier(d) { return Math.min(4, Math.floor((d - 1) / 10)); },
+  // 段：草原0〜魔王城4。エンドレス・ボスラッシュでは 5 以上（魔王城より強い）になる
+  tier(d) { return Math.floor((Math.max(1, d) - 1) / 10); },
+  // 深さ50を越えた所で出る装備の強さの倍率（「＋」付き装備）。段が1つ上がるごとに TP 倍
+  deepMul(d) { return d > 50 ? Math.pow(this.TP, (d - 50) / 10) : 1; },
   floorOf(d) { return d - this.tier(d) * 10; },
   // ダンジョン内の伸び：1階 0.78 → 10階 1.37。1〜2階は前の装備でも戦え、3階からは更新が必要になる
   ramp(f) { return 0.78 + 0.065 * (f - 1); },

@@ -32,15 +32,17 @@ const LOOT = {
   tierOf(b) { return b.tier !== undefined ? b.tier : BAL.tier(Math.min(50, b.minFloor)); },
   // その深さで出る装備：8割は今のダンジョンの段、2割は1つ前の段。ボス専用（minFloor 99）は出ない
   pickBase(rng, floor, opts = {}) {
-    const t = BAL.tier(floor), useT = t > 0 && !opts.current && rng.chance(0.2) ? t - 1 : t;
+    const t = Math.min(4, BAL.tier(floor)), useT = t > 0 && !opts.current && rng.chance(0.2) ? t - 1 : t;
     let ids = Object.keys(ITEM_BASES).filter(id => { const b = ITEM_BASES[id]; return b.minFloor <= floor + 1 && this.tierOf(b) === useT && (!opts.kind || b.kind === opts.kind); });
-    if (!ids.length) ids = Object.keys(ITEM_BASES).filter(id => ITEM_BASES[id].minFloor <= Math.max(floor + 1, t * 10 + 2) && this.tierOf(ITEM_BASES[id]) === t && (!opts.kind || ITEM_BASES[id].kind === opts.kind));
+    if (!ids.length) ids = Object.keys(ITEM_BASES).filter(id => ITEM_BASES[id].minFloor <= Math.max(Math.min(floor, 50) + 1, t * 10 + 2) && this.tierOf(ITEM_BASES[id]) === t && (!opts.kind || ITEM_BASES[id].kind === opts.kind));
     return rng.pick(ids);
   },
   roll(save, rng, floor, opts = {}) {
     const rarity = opts.legend && rng.chance(opts.legend) ? 'legend' : this.rollRarity(rng, floor, opts.minTier || 0);
     const it = Inv.make(save, opts.base || this.pickBase(rng, floor, opts), rarity, rng);
     it.isNew = true;
+    // 深さ50より深い所（エンドレス・ボスラッシュ）の装備は「＋」付きで強い
+    if (floor > 50) { it.pm = +BAL.deepMul(floor).toFixed(3); it.plus = floor - 50; }
     return it;
   },
 };

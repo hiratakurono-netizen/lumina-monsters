@@ -50,7 +50,7 @@ const Inv = {
   },
   // ショップでの値段（レアリティと付与効果の数で上がる）
   buyPrice(it) { return Math.round((this.base(it).price || 40) * this.rarity(it).mul * (1 + it.affixes.length * 0.35) * (1 + this.rarity(it).tier * 0.25)); },
-  sellPrice(it) { return Math.max(1, Math.round((this.base(it).price || 20) * 0.3 * this.rarity(it).mul * (1 + it.affixes.length * 0.25))); },
+  sellPrice(it) { return Math.max(1, Math.round((this.base(it).price || 20) * 0.3 * this.rarity(it).mul * (1 + it.affixes.length * 0.25) * (it.pm || 1))); },
   // 消耗品
   count(s, id) { return s.items[id] || 0; },
   addItem(s, id, n = 1) { const max = CONSUMABLES[id].max; const have = this.count(s, id); const add = Math.min(n, max - have); s.items[id] = have + add; return add; },

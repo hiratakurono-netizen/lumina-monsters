@@ -24,6 +24,8 @@ const DUNGEONS = {
       if (floor >= 3) t.push(['shroom', 3], ['slime_p', 3]);
       if (floor >= 6) t.push(['wolf', 4]);
       if (floor >= 8) t.push(['bat', 2], ['wolf', 2]);
+      if (floor >= 2) t.push(['wisp_shot', 3]);
+      if (floor >= 4) t.push(['big_shroom', 3]);
       return t;
     },
     // 部屋パーツ
@@ -72,6 +74,8 @@ const DUNGEONS = {
     },
     // 5階：中ボス、10階：ボス（専用の行動は第6段階で作る。今は既存の行動の流用：仮）
     bosses: { 5: 'wolf_boss', 10: 'golem_moss' },
+    // 起伏のある地形のパターン（generator.js の TERRAIN_STYLES）と、よく出る部屋の重み
+    styles: ['rolling', 'meadow'], chunkW: { spring: 3, hidden: 2, split: 3 },
   },
 };
 
@@ -102,7 +106,8 @@ Object.assign(DUNGEONS, {
     name: '砂漠', tier: 1, bg: 'desert', bgm: 'battle', bossBgm: 'boss', jumpMul: 1, env: 'heat',
     terrainTheme: { texture: ENV.desert_ground, onewayTexture: ENV.desert_oneway },
     decor: [{ img: 'desert_cactus3', s: 0.9 }, { img: 'desert_skull', s: 0.7 }, { img: 'desert_block', s: 0.8 }, { img: 'desert_cactus2', s: 0.9 }],
-    foes(f) { const t = [['scorpion', 5], ['skel', 4], ['skullfire', 3]]; if (f >= 4) t.push(['mummy', 3]); if (f >= 7) t.push(['scorpion', 3], ['skullfire', 2]); return t; },
+    foes(f) { const t = [['scorpion', 5], ['skel', 4], ['skullfire', 3]]; if (f >= 4) t.push(['mummy', 3]); if (f >= 7) t.push(['scorpion', 3], ['skullfire', 2]); if (f >= 2) t.push(['sand_eye', 3]); if (f >= 4) t.push(['vulture', 3]); return t; },
+    styles: ['dunes', 'mesa'], chunkW: { buried: 3, crumbles: 3, hazardrun: 3, cliff: 1 },
     // 草むら→サボテン（触ると痛い・叩くと砂属性）、たき火→オアシス（水分回復）、キノコ→間欠泉
     chunks: biomeChunks({ bush: 'cactus', campfire: 'oasis', mushroom: 'geyser' }, { boss: [{ x: 120, kind: 'oasis', p: 1, bossOnly: 10 }] }),
     bosses: { 5: 'sand_spider', 10: 'sand_colossus' },
@@ -111,7 +116,8 @@ Object.assign(DUNGEONS, {
     name: '雪原', tier: 2, bg: 'snow', bgm: 'battle', bossBgm: 'boss', jumpMul: 0.75, env: 'cold',
     terrainTheme: { texture: ENV.snow_ground, onewayTexture: ENV.snow_oneway },
     decor: [{ img: 'snow_tree', s: 0.9 }, { img: 'snow_tree2', s: 0.9 }, { img: 'snow_skull', s: 0.7 }, { img: 'snow_ice', s: 0.8 }],
-    foes(f) { const t = [['snow_wolf', 5], ['frost_ghost', 3], ['ice_wisp', 3]]; if (f >= 4) t.push(['ice_knight', 3]); if (f >= 7) t.push(['snow_wolf', 3], ['ice_knight', 2]); return t; },
+    foes(f) { const t = [['snow_wolf', 5], ['frost_ghost', 3], ['ice_wisp', 3]]; if (f >= 4) t.push(['ice_knight', 3]); if (f >= 7) t.push(['snow_wolf', 3], ['ice_knight', 2]); if (f >= 2) t.push(['frost_wisp', 3]); if (f >= 4) t.push(['yeti', 3]); return t; },
+    styles: ['terraces', 'crevasse'], chunkW: { liquid: 3, cliff: 3, ledges: 1, gap: 1 },
     // 草むら→氷晶（叩くと氷属性）、たき火はそのまま（霜竜の鎧を溶かす）、キノコ→間欠泉
     chunks: biomeChunks({ bush: 'icecrystal', mushroom: 'geyser' }),
     bosses: { 5: 'frost_wolf', 10: 'frost_dragon' },
@@ -121,7 +127,8 @@ Object.assign(DUNGEONS, {
     name: '火山', tier: 3, bg: 'volcano', bgm: 'battle', bossBgm: 'boss', jumpMul: 1, env: 'lava', timeLimit: 180,
     terrainTheme: { texture: ENV.volcano_ground, onewayTexture: ENV.volcano_oneway },
     decor: [{ img: 'volcano_deadtree2', s: 0.8 }, { img: 'volcano_skeleton', s: 0.6 }, { img: 'volcano_deadtree', s: 0.75 }],
-    foes(f) { const t = [['fire_imp', 5], ['skullfire', 4], ['magma_slime', 3]]; if (f >= 4) t.push(['ash_reaper', 3]); if (f >= 7) t.push(['fire_imp', 3], ['ash_reaper', 2]); return t; },
+    foes(f) { const t = [['fire_imp', 5], ['skullfire', 4], ['magma_slime', 3]]; if (f >= 4) t.push(['ash_reaper', 3]); if (f >= 7) t.push(['fire_imp', 3], ['ash_reaper', 2]); if (f >= 2) t.push(['flame_wyrm', 3]); if (f >= 4) t.push(['magma_golem', 3]); return t; },
+    styles: ['crags', 'rift'], chunkW: { liquid: 3, crumbles: 3, hazardrun: 3, movepit: 1 },
     // 草むら→溶岩だまり（踏むと熱い）、たき火→冷気の噴出口（氷属性＋制限時間の延長）、キノコ→間欠泉
     chunks: biomeChunks({ bush: 'lavapit', campfire: 'frostvent', mushroom: 'geyser' }, {
       gap: [{ x: 120, kind: 'lavapit', p: 0.5 }], step: [{ x: 720, kind: 'lavapit', p: 0.5 }],
@@ -169,14 +176,17 @@ DUNGEONS.castle = {
     { upTo: 5, name: '魔王城・外郭', bg: 'castle_out',
       terrainTheme: { texture: ENV.castle_out_ground, onewayTexture: ENV.castle_out_oneway },
       decor: [{ img: 'castle_out_deadtree', s: 0.75 }, { img: 'castle_out_rubble', s: 0.8 }, { img: 'castle_out_skeleton', s: 0.6 }, { img: 'castle_out_orb', s: 0.8 }],
-      foes(f) { const t = [['dark_knight', 5], ['eye_bat', 4], ['gargoyle', 3]]; if (f >= 3) t.push(['shade', 3]); return t; } },
+      foes(f) { const t = [['dark_knight', 5], ['eye_bat', 4], ['gargoyle', 3], ['dark_mage', 3]]; if (f >= 3) t.push(['shade', 3], ['gargoyle_d', 3]); return t; },
+      styles: ['ramparts', 'rolling'] },
     { upTo: 10, name: '魔王城・城内', bg: 'castle_in',
       terrainTheme: { texture: ENV.castle_in_ground, onewayTexture: ENV.castle_in_oneway },
       decor: [{ img: 'castle_in_candle', s: 0.9 }, { img: 'castle_in_deadtree', s: 0.75 }, { img: 'castle_in_rubble', s: 0.8 }, { img: 'castle_in_candle2', s: 0.9 }],
       objMap: { bush: null, campfire: 'candle' },
-      foes(f) { const t = [['royal_guard', 5], ['succubus', 3], ['eye_sentry', 3], ['dark_knight', 2]]; if (f >= 8) t.push(['royal_guard', 3], ['succubus', 2]); return t; } },
+      foes(f) { const t = [['royal_guard', 5], ['succubus', 3], ['eye_sentry', 3], ['dark_knight', 2], ['dark_mage', 3], ['iron_golem', 3]]; if (f >= 8) t.push(['royal_guard', 3], ['succubus', 2]); return t; },
+      styles: ['stairs', 'halls'] },
   ],
   bosses: { 5: 'gate_keeper', 10: 'demon_king' },
+  chunkW: { guard: 3, gatewall: 3, split: 3, movepit: 3 },
 };
 
 Object.assign(ENEMIES, {
@@ -193,4 +203,21 @@ Object.assign(ENEMIES, {
   gate_keeper: { spr: 'castle', scale: 0.75, hp: 640, dmg: 15, speed: 170, ai: 'wolfBoss', minion: 'dark_knight', w: 150, h: 175, exp: 300, boss: true, name: '動く城門（仮）' },
   // 10階：魔王。魔王の結界（ダメージ半減）は炎か氷、どちらの属性でもはがせる。HP半分で闇の弾を撃ってくる
   demon_king:  { spr: 'eldereye', scale: 0.85, hp: 1500, dmg: 16, speed: 60, ai: 'demonKing', vine: 'abyss', moss: { el: 'any', name: '魔王の結界', filter: 'hue-rotate(250deg) saturate(1.8) brightness(1.2)' }, w: 190, h: 175, exp: 800, boss: true, name: '魔王（仮）' },
+});
+
+// =====================================================================
+//  追加の攻撃パターンを持つ敵（射撃＝エネルギー弾 / 急降下 / 叩きつけ）
+// =====================================================================
+Object.assign(ENEMIES, {
+  wisp_shot:  { spr: 'wisp', scale: 0.5, hp: 24, dmg: 7, speed: 70, ai: 'shooter', w: 44, h: 58, exp: 7, fly: true, shot: '#8affd0' },
+  big_shroom: { spr: 'shroom_l', scale: 0.6, hp: 60, dmg: 9, speed: 45, ai: 'slammer', w: 76, h: 72, exp: 11 },
+  sand_eye:   { spr: 'eye_wing', scale: 0.5, hp: 38, dmg: 9, speed: 80, ai: 'shooter', w: 64, h: 34, exp: 11, fly: true, shot: '#ffd36a' },
+  vulture:    { spr: 'bat_big', scale: 0.36, hp: 44, dmg: 10, speed: 160, ai: 'diver', w: 70, h: 40, exp: 12, fly: true },
+  frost_wisp: { spr: 'wisp', scale: 0.5, hp: 40, dmg: 9, speed: 70, ai: 'shooter', w: 44, h: 58, exp: 12, fly: true, shot: '#9fe0ff' },
+  yeti:       { spr: 'beast', scale: 0.62, hp: 110, dmg: 13, speed: 60, ai: 'slammer', w: 96, h: 68, exp: 18 },
+  flame_wyrm: { spr: 'wyrmling', scale: 0.42, hp: 60, dmg: 12, speed: 150, ai: 'diver', w: 76, h: 50, exp: 15, fly: true },
+  magma_golem:{ spr: 'golem_m', scale: 0.62, hp: 110, dmg: 13, speed: 55, ai: 'slammer', w: 66, h: 68, exp: 17 },
+  dark_mage:  { spr: 'hood', scale: 0.6, hp: 90, dmg: 12, speed: 60, ai: 'shooter', w: 60, h: 68, exp: 20, shot: '#c58aff' },
+  gargoyle_d: { spr: 'bat_big', scale: 0.42, hp: 80, dmg: 13, speed: 170, ai: 'diver', w: 76, h: 46, exp: 19, fly: true },
+  iron_golem: { spr: 'golem_m', scale: 0.78, hp: 180, dmg: 15, speed: 55, ai: 'slammer', w: 84, h: 86, exp: 26 },
 });

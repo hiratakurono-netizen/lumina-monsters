@@ -7,10 +7,10 @@
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const root = path.join(__dirname, '..');
 const ctx = { console, Math, JSON, Object, Array, Set, Map, Error, document: { createElement: () => ({ getContext: () => ({}) }) }, window: {}, navigator: { userAgent: '' }, localStorage: { getItem() {}, setItem() {} }, Image: class {}, performance: { now: () => 0 } };
-vm.createContext(ctx);
+vm.createContext(ctx); vm.runInContext('var clamp = (v, a, b) => Math.max(a, Math.min(b, v)); var rand = (a, b) => a + Math.random() * (b - a);', ctx);
 const load = f => vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8').replace(/^(const|let|class) (\w+)/gm, (m, k, n) => k === 'class' ? `var ${n} = class ${n}` : `var ${n}`), ctx, { filename: f });
-for (const f of ['src/config.js', 'src/data/balance.js', 'src/data/items.js', 'src/data/dungeons.js']) load(f);
-const { BAL, DUNGEONS, ENEMIES, ITEM_BASES } = vm.runInContext('({ BAL, DUNGEONS, ENEMIES, ITEM_BASES })', ctx);
+for (const f of ['src/config.js', 'src/data/balance.js', 'src/data/items.js', 'src/data/dungeons.js', 'src/systems/rng.js', 'src/dungeon/generator.js']) load(f);
+const { BAL, DUNGEONS, ENEMIES, ITEM_BASES, BOSSRUSH, ENDLESS } = vm.runInContext('({ BAL, DUNGEONS, ENEMIES, ITEM_BASES, BOSSRUSH, ENDLESS })', ctx);
 
 const HPS = 2, CRIT = 1 + 0.1 * 0.5, IDS = ['grassland', 'desert', 'snow', 'volcano', 'castle'], NAMES = ['草原', '砂漠', '雪原', '火山', '魔王城'];
 const R = BAL.RARITY_MUL;
@@ -87,6 +87,25 @@ md += `| 雪原 | 雪山の壁（炎）・水の穴（氷で凍らせる） | �
 md += `| 火山 | 溶岩の岩（氷）・溶岩の穴（氷で冷やす） | 冷気の噴出口（何度でも） | 制限時間・噴き出す床・崩れる足場・ボスの攻撃で足場が壊れる |\n`;
 md += `| 魔王城 | 外：瓦礫の壁（何でも）／中：封印の扉（燭台を全部灯す） | 燭台 | 落とし格子・闇の噴出・強化個体の見張り・ボスの攻撃で足場が壊れる |\n\n`;
 md += `検証：生成した全ダンジョン×10階×数百シードで、出口まで届くか・属性の壁の手前に源があるかを調べている（源を消すと必ず「到達不可」になることも確認）。\n`;
+// ---- エンドレス・ボスラッシュ ----
+const deepGear = (d, v, r) => gear(Math.min(4, BAL.tier(d)), v, r) * BAL.deepMul(d);   // その深さで拾う「＋」装備
+const deepArmor = d => { const a = armorOf(4), m = BAL.deepMul(d) * R[2] / R[1]; return { def: Math.round(a.def * m), hp: Math.round(a.hp * m) }; };
+const MAIN = { g: gear(4, 1.45, 4), arm: (() => { const a = armorOf(4); return { def: Math.round(a.def * R[4] / R[1]), hp: Math.round(a.hp * R[4] / R[1]) }; })() };   // 本編の最強（魔王剣レジェンド・最上位防具レジェンド）
+md += `## 7. エンドレスモード（雪原クリアで解放）\n\n深さ＝20＋階。5階ごとに景色が変わり（草原→砂漠→雪原→火山→魔王城）、5階ごとに中ボス、10階ごとにボス。深さ50（＝31階）を越えると「＋」付き装備（威力×${BAL.TP}/10階）が出る。\n\n`;
+md += `| 階 | 深さ | 敵HP | 防御 | 本編最強の武器 | その深さの＋装備（レア） | 接触ダメージ（本編最強の防具） |\n|---|---|---|---|---|---|---|\n`;
+for (const n of [1, 10, 20, 30, 40, 50, 60, 80]) {
+  const d = ENDLESS.depth(n), S = BAL.enemy(d), hp = BAL.REF_FOE.hp * S.hpMul, ttk = g => (hp / hitDmg(d, g, S.def) / HPS).toFixed(1);
+  md += `| ${n} | ${d} | ${hp.toFixed(0)} | ${S.def.toFixed(0)} | ${ttk(MAIN.g)}秒 | ${ttk(deepGear(d, 1.15, 2))}秒 | ${taken(BAL.REF_FOE.dmg, d, MAIN.arm).toFixed(0)}（最大HP ${pHp(d, MAIN.arm).toFixed(0)}） |\n`;
+}
+md += `\n## 8. ボスラッシュ（火山クリアで解放）\n\nボスと5連戦（中ボス3体→ボス2体、戦うごとに深さ+2）。勝つたびにHPが少し回復。5勝でクリア報酬（初回はボーナス）。前の難易度を制覇すると次が解放。\n\n`;
+md += `| 難易度 | 深さ | 10階ボスのHP | 防御 | 本編最強で倒す時間 | 被弾1回（本編最強の防具） | エンドレス装備（同じ深さのレア）で倒す時間 | 被弾1回（エンドレス防具） |\n|---|---|---|---|---|---|---|---|\n`;
+for (const L of BOSSRUSH.LEVELS) {
+  const d = L.depth + 8, s2 = BAL.bossScale(d, 10, 'golem_moss'), hp = ENEMIES.golem_moss.hp * s2.hpMul, ttk = g => (hp / hitDmg(d, g, s2.def) / HPS).toFixed(0);
+  const hitMain = taken(13 * 1.3, d, MAIN.arm), hitDeep = taken(13 * 1.3, d, d > 50 ? deepArmor(d) : MAIN.arm);
+  md += `| ${L.name} | ${L.depth}〜${d} | ${hp.toFixed(0)} | ${s2.def.toFixed(0)} | ${ttk(MAIN.g)}秒 | ${hitMain.toFixed(0)}（HP ${pHp(d, MAIN.arm).toFixed(0)}） | ${ttk(deepGear(d, 1.15, 2))}秒 | ${hitDeep.toFixed(0)}（HP ${pHp(d, d > 50 ? deepArmor(d) : MAIN.arm).toFixed(0)}） |\n`;
+}
+md += `\n読み方：初級〜上級は本編の装備で挑める。超級は本編最強の装備だと時間がかかり被弾も重い（数発で倒れる）＝エンドレスの＋装備が欲しくなる。地獄級は本編装備では防御にほぼ阻まれ（下限25%しか通らない）、被弾も致命的＝エンドレス深層の装備が前提。\n\n`;
+md += `## 9. 敵の攻撃パターン（追加）\n- 射撃（エネルギー弾）：距離をとって光って溜め、主人公へ弾を撃つ。深い階では2連射。弾は攻撃で打ち消せる\n- 急降下：上空で主人公の真上に回り込み、震えてから真下へ突っ込む。地面に刺さって約1秒動けない（反撃の好機）\n- 叩きつけ：伏せて溜め、高く跳んで主人公の位置へ落ちる。着地の瞬間に近くの地面にいると衝撃が当たる（ジャンプでかわせる）\n\n`;
 fs.writeFileSync(path.join(root, 'docs/BALANCE.md'), md);
 // 自己チェック：1〜2階は前の装備で4秒未満、5階以降は前段レアが今コモンより遅い
 const bad = rows.filter(r => r.t > 0 && ((r.f <= 2 && r.pr >= 4) || (r.f >= 5 && r.pr < r.cc)));

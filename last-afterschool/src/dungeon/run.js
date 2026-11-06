@@ -4,19 +4,20 @@
 //  ・帰還の鈴：いつでも町へ（ゴールドは失わない）
 //  ・倒れた：その潜入で拾ったゴールドの1/3を失って町へ（装備・アイテムは失わない）
 // =====================================================================
+const L_ = (who, text, face) => L(who, text, face);   // ボスラッシュでは L を難易度に使うため
 const DungeonFlow = {
   dg() { const id = this.run.id; return (this.save.dungeons[id] = this.save.dungeons[id] || { best: 0, checkpoint: 1, cleared: false }); },
 
-  departDungeon(id, startFloor) {
-    if (!DUNGEONS[id]) { UI.toast('このダンジョンはまだ実装されていません'); return; }
+  departDungeon(id, startFloor, opts = {}) {
+    if (!DUNGEONS[id] && id !== 'endless' && id !== 'bossrush') { UI.toast('このダンジョンはまだ実装されていません'); return; }
     if (!this.save.equip.weapons.some(u => u != null)) { UI.toast('武器を1つ以上装備してください（自宅）'); return; }
     UI.close();
-    this.run = { id, floor: startFloor, startFloor, gained: 0, seedBase: (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0, hp: null, mp: 10, water: 100, heat: 0 };   // 水分は潜入のはじめに満タン
+    this.run = { id, floor: startFloor, startFloor, diff: opts.diff || 0, gained: 0, seedBase: (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0, hp: null, mp: 10, water: 100, heat: 0 };   // 水分は潜入のはじめに満タン
     this.transition(() => this.startFloor());
   },
   startFloor() {
-    const ch = DungeonGen.build(this.run); ch.dungeonId = this.run.id;
-    if (DUNGEONS[this.run.id].timeLimit) this.run.timeLeft = DUNGEONS[this.run.id].timeLimit;   // 火山：階ごとに制限時間
+    const ch = DungeonGen.build(this.run); ch.dungeonId = ch.dungeonId || this.run.id;
+    if (ch.timeLimit) this.run.timeLeft = ch.timeLimit;   // 火山：階ごとに制限時間
     this.world = new World(ch, this.save, this);
     const d = this.dg(); d.best = Math.max(d.best || 0, this.run.floor); Save.store(this.save);
     this.card = { t: 0 }; this.scene = 'card'; this.fade = 1;
@@ -27,6 +28,8 @@ const DungeonFlow = {
 
   floorCleared(W) {
     this.keepHero(W);
+    if (this.run.id === 'endless') return this.endlessCleared(W);
+    if (this.run.id === 'bossrush') return this.bossrushCleared(W);
     const f = this.run.floor, d = this.dg(), name = DUNGEONS[this.run.id].name;
     if (f === 10 && this.run.id === 'castle') {   // 最終ダンジョン：魔王を倒した（エンディングは今後のストーリーで作る：仮）
       d.cleared = true; Save.store(this.save);
@@ -53,6 +56,30 @@ const DungeonFlow = {
       return;
     }
     this.nextFloor();
+  },
+  // エンドレス：5階ごとに「帰る／進む」を選べる。ボス（5階ごと）を倒すとHP全回復
+  endlessCleared(W) {
+    const n = this.run.floor, d = this.dg();
+    d.best = Math.max(d.best || 0, n); Save.store(this.save);
+    if (n % 5 !== 0) return this.nextFloor();
+    this.run.hp = W.player.maxHp;
+    const h = UI.h;
+    UI.open({ title: `エンドレス ${n}階`, onClose: () => { if (this.run && this.run.floor === n) this.nextFloor(); }, tabs: [{ label: '', render: el => {
+      el.append(h('div', { class: 'ui-note' }, `${n}階を突破！ HPが全回復した。最高記録 ${d.best}階。ここから先はさらに敵が強くなる（深さ ${ENDLESS.depth(n + 1)}）。`));
+      el.append(h('button', { class: 'ui-btn', onclick: () => { this.run.floor = 0; UI.close(); this.returnToTown([L('sys', `エンドレス ${n}階で町へ帰還した。`)]); } }, '町へ帰還する'));
+      el.append(h('button', { class: 'ui-btn ghost', onclick: () => UI.close() }, `${n + 1}階へ進む`));
+    } }] });
+  },
+  // ボスラッシュ：5連戦。勝つたびにHPが少し回復、5勝でクリア報酬
+  bossrushCleared(W) {
+    const L = BOSSRUSH.LEVELS[this.run.diff], n = this.run.floor;
+    if (n < 5) { this.run.hp = Math.min(W.player.maxHp, W.player.hp + W.player.maxHp * L.heal); return this.nextFloor(); }
+    const s = this.save; s.bossrush = s.bossrush || {}; const first = !s.bossrush[L.id]; s.bossrush[L.id] = (s.bossrush[L.id] || 0) + 1;
+    const rng = makeRng((Math.random() * 4294967296) >>> 0), got = [];
+    for (let i = 0; i < L.reward + (first ? 1 : 0); i++) { const it = LOOT.roll(s, rng, L.depth + 8, { minTier: i === 0 ? 3 : 2 }); if (Inv.add(s, it)) got.push(Inv.name(it)); }
+    const gold = Math.round(200 * Math.pow(1.6, this.run.diff) * (first ? 2 : 1)); s.gold += gold;
+    Save.store(s);
+    this.returnToTown([L_('sys', `ボスラッシュ「${L.name}」制覇！${first ? '（初回ボーナス）' : ''}`), L_('sys', `報酬：${gold} G${got.length ? '・' + got.join('・') : '（持ち物がいっぱい）'}`)]);
   },
   nextFloor() { this.run.floor++; Save.store(this.save); this.transition(() => this.startFloor()); },
 

@@ -9,7 +9,7 @@ const Stats = {
     const it = uid != null ? Inv.byUid(s, uid) : null;
     if (!it) return null;
     const b = Inv.base(it), r = Inv.rarity(it);
-    const out = { uid, type: b.type, name: Inv.name(it), rarity: r, powerMul: (b.atk / WEAPON_TYPE_REF[b.type]) * r.mul, crit: b.crit || 0, element: b.element || null, icon: ITEM_ICON[b.id] || null,
+    const out = { uid, type: b.type, name: Inv.name(it), rarity: r, powerMul: (b.atk / WEAPON_TYPE_REF[b.type]) * r.mul * (it.pm || 1), crit: b.crit || 0, element: b.element || null, icon: ITEM_ICON[b.id] || null,
       atkPct: 0, aspd: 0, steal: 0, spcost: 0 };   // この武器を持っている時だけ効く付与効果
     for (const a of it.affixes) {
       const d = AFFIX_BY_ID[a.k]; if (!d) continue;
@@ -24,7 +24,7 @@ const Stats = {
     const worn = [s.equip.armor, ...s.equip.acc, ...s.equip.weapons].map(u => (u != null ? Inv.byUid(s, u) : null)).filter(Boolean);
     for (const it of worn) {
       const b = Inv.base(it), isWeapon = b.kind === 'weapon';
-      const rm = Inv.rarity(it).mul;   // 防具・アクセもレアリティで防御とHPが上がる
+      const rm = Inv.rarity(it).mul * (it.pm || 1);   // 「＋」付き装備は防御・HPも上がる   // 防具・アクセもレアリティで防御とHPが上がる
       if (!isWeapon) { st.def += Math.round((b.def || 0) * rm); st.maxHp += Math.round((b.hp || 0) * rm); st.crit += b.crit || 0; st.move += b.spd || 0; }
       for (const a of it.affixes) {
         if (isWeapon && ['atk', 'aspd', 'crit', 'steal', 'spcost'].includes(a.k)) continue;  // 武器の攻撃系は持っている時だけ（戦闘側で加算）

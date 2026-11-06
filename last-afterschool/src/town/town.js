@@ -370,6 +370,20 @@ const Town = {
   openGate(game) {
     const s = game.save, h = UI.h;
     const list = [['grassland', '草原'], ['desert', '砂漠'], ['snow', '雪原'], ['volcano', '火山'], ['castle', '魔王城']];
+    const endlessTab = el => {
+      const open = (s.dungeons.snow || {}).cleared, d = s.dungeons.endless || {};
+      el.append(h('div', { class: 'ui-note' }, open ? `どこまでも続く魔界。5階ごとに景色が変わり、深くなるほど敵が強く、「＋」付きの強い装備が手に入る。5階ごとに町へ戻れる。最高記録：${d.best || 0}階` : '雪原をクリアすると挑戦できます。'));
+      el.append(h('button', { class: 'ui-btn', disabled: !open, onclick: () => game.departDungeon('endless', 1) }, '1階から挑む'));
+    };
+    const rushTab = el => {
+      const open = (s.dungeons.volcano || {}).cleared, rec = s.bossrush || {};
+      el.append(h('div', { class: 'ui-note' }, open ? 'ボスと5連戦。5回勝てばクリア。超級・地獄級はエンドレスの「＋」装備が必要な難しさです。' : '火山をクリアすると挑戦できます。'));
+      BOSSRUSH.LEVELS.forEach((Lv, i) => {
+        const can = open && (i === 0 || rec[BOSSRUSH.LEVELS[i - 1].id]);
+        el.append(h('div', { class: 'ui-row' }, [h('div', { class: 'main' }, [h('div', { class: 'name' }, Lv.name), h('div', { class: 'sub' }, !open ? '？？？' : can ? (rec[Lv.id] ? `制覇 ${rec[Lv.id]}回` : '未制覇') : '前の難易度を制覇すると挑戦できます')]),
+          h('button', { class: 'ui-btn', disabled: !can, onclick: () => game.departDungeon('bossrush', 1, { diff: i }) }, '挑む')]));
+      });
+    };
     UI.open({ title: '魔界へのゲート', tabs: [{ label: 'ダンジョン', render: el => {
       el.append(h('div', { class: 'ui-note' }, '行き先と開始階を選んでください。'));
       list.forEach(([id, name], i) => {
@@ -380,6 +394,6 @@ const Town = {
           h('button', { class: 'ui-btn', disabled: !open, onclick: start(1) }, '1階から'),
           h('button', { class: 'ui-btn ghost', disabled: !open || !(d.checkpoint >= 6), onclick: start(6) }, '6階から')]));
       });
-    } }] });
+    } }, { label: 'エンドレス', render: endlessTab }, { label: 'ボスラッシュ', render: rushTab }] });
   },
 };

@@ -435,6 +435,9 @@ class Enemy {
       this.stun -= dt;
       this.vx *= Math.pow(0.02, dt);
       if (d.fly && !this.launched) this.vy *= Math.pow(0.02, dt);
+    } else if (this.entering) {
+      // 戦闘エリアの外から跳び込んでくる途中（着地するまで行動しない）
+      this.face = Math.sign(this.vx) || dir;
     } else if (W.state === 'play' && !W.dialogue && !asleep) {
       this.face = dir;
       AI[d.ai](this, dt * (this.agg || 1), dir, dist, P, W);   // 深いダンジョン・強化個体ほど行動が速い
@@ -443,7 +446,7 @@ class Enemy {
     const grav = (d.fly && !this.launched) ? 0 : 1900;
     const T = W.terrain, prevX = this.x, prevY = this.y;
     // 足場の端から落ちないように止まる（飛ばされた時は落ちる）
-    if (!d.fly && !d.boss && this.onGround && !this.launched && this.vx && this.vy >= 0) { const g = T.groundBelow(this.x + Math.sign(this.vx) * (d.w / 2 + 6), this.y - 2, 0); if (g > this.y + 40) this.vx = 0; }
+    if (!d.fly && !d.boss && this.onGround && !this.launched && !this.entering && this.vx && this.vy >= 0) { const g = T.groundBelow(this.x + Math.sign(this.vx) * (d.w / 2 + 6), this.y - 2, 0); if (g > this.y + 40) this.vx = 0; }
     let slow = 1; if (this.chill > 0) { this.chill -= dt; slow = this.d.boss ? 0.75 : 0.5; if (Math.random() < 0.2) W.spark(this.x, this.y - this.d.h * 0.5, '#bfe9ff', 1); }   // 氷で凍えると動きが鈍る
     this.vy += grav * dt; this.x += this.vx * dt * slow; this.y += this.vy * dt;
     if (!d.fly) this.x = T.blockX(this.x, prevX, this.y - d.h, this.y - 4, d.w / 2);
@@ -452,11 +455,11 @@ class Enemy {
     if (this.y > VIEW_H + 120 && !d.boss) { this.dead = true; return; }  // 穴に落ちた敵は消える
     if (this.y >= floor) {
       if (this.launched && this.vy > 380) { this.vy = -this.vy * 0.35; W.dust(this.x, floor, 5); Audio2.sfx('kick'); }
-      else { this.y = floor; this.vy = 0; this.onGround = true; if (this.launched && d.fly) { this.launched = false; } else this.launched = false; }
+      else { if (this.entering && this.vy > 0) { this.entering = false; this.vx = 0; W.dust(this.x, floor, 8); Audio2.sfx('kick'); } this.y = floor; this.vy = 0; this.onGround = true; if (this.launched && d.fly) { this.launched = false; } else this.launched = false; }
     }
     if (d.fly && !this.launched && this.stun <= 0 && this.y < 60) this.y = 60;
     const lo = W.camLock ? W.camLock.min - 60 : -100, hi = W.camLock ? W.camLock.max + VIEW_W + 60 : W.ch.length + 100;
-    if (this.spawnT <= 0) this.x = clamp(this.x, lo + 40, hi - 40);
+    if (this.spawnT <= 0 && !this.entering) this.x = clamp(this.x, lo + 40, hi - 40);
     // 接触ダメージ
     const contact = this.contactDmg !== undefined ? this.contactDmg : d.dmg;
     if (contact > 0 && this.stun <= 0 && this.alpha > 0.5 && overlap(this.box(), P.box())) P.hurt(contact * (this.dmgK || 1), this.x);
@@ -486,6 +489,9 @@ class Enemy {
       if (this.state === 'dizzy') rot = Math.sin(this.t * 6) * 0.1;
       if (this.state === 'land') { sx = 1.2; sy = 0.82; }
     }
+    if (d.ai === 'slammer') { if (this.state === 'crouch') { sx = 1.2; sy = 0.78; ox = Math.sin(this.t * 50) * 2; } if (this.state === 'land') { sx = 1.25; sy = 0.8; } }
+    if (d.ai === 'diver') { if (this.state === 'tele') ox = Math.sin(this.t * 70) * 3; if (this.state === 'dive') { sx = 0.8; sy = 1.25; } if (this.state === 'stuck') rot = Math.sin(this.t * 8) * 0.15; }
+    if (this.entering) rot = (this.vy < 0 ? -0.25 : 0.2) * (this.face || 1);
     const spawnA = this.spawnT > 0 ? 1 - this.spawnT / 0.4 : 1;
     // 影
     ctx.fillStyle = 'rgba(10,0,20,.3)'; ctx.beginPath();
@@ -576,6 +582,57 @@ const AI = {
     e.phased = cyc >= 0.7;
     const ty = P.y - 70 + Math.sin(e.t * 1.7) * 40;
     e.vx += (dir * e.d.speed - e.vx) * dt * 1.5; e.vy = (ty - e.y) * 1.5;
+  },
+  // ---- 本編で追加した攻撃パターン ----
+  // 射撃：距離をとり、光って溜めてからエネルギー弾を撃つ（深い階ほど連射）。弾は攻撃で打ち消せる
+  shooter(e, dt, dir, dist, P, W) {
+    e.cool -= dt; const fly = !!e.d.fly;
+    if (fly) { const ty = GROUND_Y - 200 + Math.sin(e.t * 1.6) * 30; e.vy = (Math.min(ty, P.y - 150) - e.y) * 2; }
+    if (e.state === 'move') {
+      const want = dist < 260 ? -dir : dist > 430 ? dir : 0;   // 近すぎたら離れ、遠すぎたら寄る
+      e.vx += (want * e.d.speed - e.vx) * Math.min(1, dt * 4);
+      if (e.cool <= 0 && dist < 620) { e.state = 'tele'; e.st = 0.7; e.vx = 0; e.shots = (e.agg || 1) >= 1.25 ? 2 : 1; }
+    } else if (e.state === 'tele') {
+      e.st -= dt; if (Math.random() < 0.4) W.spark(e.x + dir * 30, e.y - e.d.h * 0.55, e.d.shot || '#8affd0', 1);
+      if (e.st <= 0) {
+        const sx = e.x + dir * 34, sy = e.y - e.d.h * 0.55, a = Math.atan2((P.y - 60) - sy, P.x - sx);
+        W.addProj(new EnergyShot(W, sx, sy, a, e.d.shot || '#8affd0', e.dmgK || 1)); Audio2.sfx('blip');
+        e.shots--; if (e.shots > 0) e.st = 0.28; else { e.state = 'move'; e.cool = rand(2.0, 3.0); }
+      }
+    }
+  },
+  // 急降下：高い所から主人公の真上へ回り込み、震えてから真下へ突っ込む。地面に刺さって少しの間動けない（反撃の好機）
+  diver(e, dt, dir, dist, P, W) {
+    e.cool -= dt;
+    if (e.state === 'move') {
+      const ty = GROUND_Y - 320; e.vy = (ty - e.y) * 2.5; e.vx += ((P.x - e.x) * 2.2 - e.vx) * Math.min(1, dt * 3);
+      e.vx = clamp(e.vx, -e.d.speed * 1.6, e.d.speed * 1.6);
+      if (e.cool <= 0 && Math.abs(P.x - e.x) < 50 && e.y < GROUND_Y - 250) { e.state = 'tele'; e.st = 0.5; e.vx = 0; e.vy = 0; }
+    } else if (e.state === 'tele') {
+      e.st -= dt; e.vy = -30; if (e.st <= 0) { e.state = 'dive'; e.vy = 950; e.vx = 0; }
+    } else if (e.state === 'dive') {
+      e.vy = 950; const g = W.terrain.groundBelow(e.x, e.y - 10, 0);
+      if (e.y >= Math.min(g, GROUND_Y + 40) - 24) { e.state = 'stuck'; e.st = 0.9; e.vy = 0; W.dust(e.x, e.y, 10); W.shake = Math.max(W.shake, 5); Audio2.sfx('kick'); }
+    } else if (e.state === 'stuck') {
+      e.vy = 0; e.st -= dt; if (e.st <= 0) { e.state = 'move'; e.cool = rand(1.8, 2.6); e.vy = -300; }
+    }
+    e.contactDmg = e.state === 'dive' ? e.d.dmg * 1.5 : e.state === 'stuck' ? 0 : e.d.dmg;
+  },
+  // 叩きつけ：重い体で高く跳び、主人公の位置へ落ちて衝撃波。着地の瞬間に地面にいると当たる（ジャンプでかわせる）
+  slammer(e, dt, dir, dist, P, W) {
+    e.cool -= dt;
+    if (e.state === 'move') {
+      if (e.onGround) e.vx = dist > 90 ? dir * e.d.speed : 0;
+      if (e.cool <= 0 && dist < 340 && e.onGround) { e.state = 'crouch'; e.st = 0.6; e.vx = 0; }
+    } else if (e.state === 'crouch') {
+      e.st -= dt; if (e.st <= 0) { e.state = 'air'; const T = 0.95; e.vy = -900; e.vx = clamp((P.x - e.x) / T, -420, 420); e.onGround = false; e.airT = 0; }
+    } else if (e.state === 'air') {
+      e.airT += dt;
+      if (e.onGround && e.airT > 0.15) {
+        e.state = 'land'; e.st = 0.7; e.vx = 0; W.shake = Math.max(W.shake, 9); Audio2.sfx('slam'); W.dust(e.x, e.y, 14);
+        W.addProj(new ImpactRing(W, e.x, e.y, 170, e.dmgK || 1));
+      }
+    } else if (e.state === 'land') { e.st -= dt; if (e.st <= 0) { e.state = 'move'; e.cool = rand(1.8, 2.8); } }
   },
   // 草原の主 オオカミ：飛びかかり（伏せて溜める）／突進（震えて赤く光る）／HP半分で子分を呼ぶ
   wolfBoss(e, dt, dir, dist, P, W) {
@@ -737,6 +794,34 @@ class Vine {
     const h = 120 * Math.min(1, this.t / 0.08) * (this.t > 0.3 ? 1 - (this.t - 0.3) / 0.15 : 1);
     ctx.fillStyle = this.c.dark; ctx.beginPath(); ctx.moveTo(x - 22, this.gy); ctx.lineTo(x - 4, this.gy - h); ctx.lineTo(x + 6, this.gy - h * 0.7); ctx.lineTo(x + 22, this.gy); ctx.fill();
     ctx.fillStyle = this.c.light; ctx.fillRect(x - 3, this.gy - h, 5, h * 0.9);
+  }
+}
+// エネルギー弾（射撃する敵）。主人公の攻撃で打ち消せる（reflectable）
+class EnergyShot {
+  constructor(w, x, y, ang, color, k = 1) { Object.assign(this, { w, x, y, ang, color, k, t: 0, dead: false, reflectable: true }); }
+  box() { return [this.x - 12, this.y - 12, this.x + 12, this.y + 12]; }
+  update(dt) {
+    this.t += dt; this.x += Math.cos(this.ang) * 320 * dt; this.y += Math.sin(this.ang) * 320 * dt;
+    if (this.t > 3 || this.y > this.w.terrain.groundBelow(this.x, this.y - 30, 0) || this.y > GROUND_Y + 60) { this.dead = true; this.w.spark(this.x, this.y, this.color, 4); }
+    if (overlap(this.box(), this.w.player.box())) { this.w.player.hurt(10 * this.k, this.x); this.dead = true; }
+    if (Math.random() < 0.5) this.w.fx.push(new Particle({ x: this.x, y: this.y, life: 0.25, size: 5, color: this.color, add: true }));
+  }
+  draw(ctx, cam) {
+    const x = this.x - cam, r = 11 + Math.sin(this.t * 30) * 2;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, this.y, 1, x, this.y, r * 2); g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, this.color); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - r * 2, this.y - r * 2, r * 4, r * 4); ctx.restore();
+  }
+}
+// 叩きつけの衝撃：着地の瞬間、近くの地面にいる主人公に当たる（空中ならかわせる）
+class ImpactRing {
+  constructor(w, x, y, r, k = 1) { Object.assign(this, { w, x, y, r, k, t: 0, dead: false });
+    const P = w.player; if (P.onGround && Math.abs(P.x - x) < r && Math.abs(P.y - y) < 40) P.hurt(14 * k, x); }
+  update(dt) { this.t += dt; if (this.t > 0.4) this.dead = true; }
+  draw(ctx, cam) {
+    const x = this.x - cam, k = this.t / 0.4;
+    ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#ffe2b0'; ctx.lineWidth = 6 * (1 - k) + 1;
+    ctx.beginPath(); ctx.ellipse(x, this.y, this.r * (0.4 + k * 0.6), 14 * (0.4 + k), 0, 0, 7); ctx.stroke(); ctx.restore();
   }
 }
 // 闇の弾：少し溜めてから真っすぐ飛ぶ
