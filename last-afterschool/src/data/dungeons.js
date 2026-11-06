@@ -15,7 +15,7 @@ const BL = (x, y, w, h) => ({ x, y, w, h });                                 // 
 
 const DUNGEONS = {
   grassland: {
-    name: '草原', tier: 0, bg: 'grassland', bgm: 'battle', bossBgm: 'boss', jumpMul: 1,
+    name: '草原', tier: 0, bg: 'grassland', bgm: 'grassland', bossBgm: 'boss', jumpMul: 1,
     decor: [{ img: 'flowers', s: 0.7 }],   // 飾り（触れても何も起きない）
     terrainTheme: { texture: ENV.ground_grass, top: '#7fb069', side: '#5b4a5e', dark: '#463a4c', edge: '#b9e08f', oneway: '#8a6e5a', onewayTop: '#c9a77e' },
     // 階ごとの敵の出現表（重み）。深い階ほど種類が増える
@@ -103,7 +103,7 @@ function biomeChunks(map, extra = {}) {
 }
 Object.assign(DUNGEONS, {
   desert: {
-    name: '砂漠', tier: 1, bg: 'desert', bgm: 'battle', bossBgm: 'boss', jumpMul: 1, env: 'heat',
+    name: '砂漠', tier: 1, bg: 'desert', bgm: 'desert', bossBgm: 'boss', jumpMul: 1, env: 'heat',
     terrainTheme: { texture: ENV.desert_ground, onewayTexture: ENV.desert_oneway },
     decor: [{ img: 'desert_cactus3', s: 0.9 }, { img: 'desert_skull', s: 0.7 }, { img: 'desert_block', s: 0.8 }, { img: 'desert_cactus2', s: 0.9 }],
     foes(f) { const t = [['scorpion', 5], ['skel', 4], ['skullfire', 3]]; if (f >= 4) t.push(['mummy', 3]); if (f >= 7) t.push(['scorpion', 3], ['skullfire', 2]); if (f >= 2) t.push(['sand_eye', 3]); if (f >= 4) t.push(['vulture', 3]); return t; },
@@ -113,7 +113,7 @@ Object.assign(DUNGEONS, {
     bosses: { 5: 'sand_spider', 10: 'sand_colossus' },
   },
   snow: {
-    name: '雪原', tier: 2, bg: 'snow', bgm: 'battle', bossBgm: 'boss', jumpMul: 0.75, env: 'cold',
+    name: '雪原', tier: 2, bg: 'snow', bgm: 'snow', bossBgm: 'boss', jumpMul: 0.75, env: 'cold',
     terrainTheme: { texture: ENV.snow_ground, onewayTexture: ENV.snow_oneway },
     decor: [{ img: 'snow_tree', s: 0.9 }, { img: 'snow_tree2', s: 0.9 }, { img: 'snow_skull', s: 0.7 }, { img: 'snow_ice', s: 0.8 }],
     foes(f) { const t = [['snow_wolf', 5], ['frost_ghost', 3], ['ice_wisp', 3]]; if (f >= 4) t.push(['ice_knight', 3]); if (f >= 7) t.push(['snow_wolf', 3], ['ice_knight', 2]); if (f >= 2) t.push(['frost_wisp', 3]); if (f >= 4) t.push(['yeti', 3]); return t; },
@@ -124,7 +124,7 @@ Object.assign(DUNGEONS, {
     surfaces: { ice: 0.3, snow: 0.2 },   // 地面が氷（滑る）・深雪（遅い）になる確率
   },
   volcano: {
-    name: '火山', tier: 3, bg: 'volcano', bgm: 'battle', bossBgm: 'boss', jumpMul: 1, env: 'lava', timeLimit: 180,
+    name: '火山', tier: 3, bg: 'volcano', bgm: 'volcano', bossBgm: 'boss', jumpMul: 1, env: 'lava', timeLimit: 180,
     terrainTheme: { texture: ENV.volcano_ground, onewayTexture: ENV.volcano_oneway },
     decor: [{ img: 'volcano_deadtree2', s: 0.8 }, { img: 'volcano_skeleton', s: 0.6 }, { img: 'volcano_deadtree', s: 0.75 }],
     foes(f) { const t = [['fire_imp', 5], ['skullfire', 4], ['magma_slime', 3]]; if (f >= 4) t.push(['ash_reaper', 3]); if (f >= 7) t.push(['fire_imp', 3], ['ash_reaper', 2]); if (f >= 2) t.push(['flame_wyrm', 3]); if (f >= 4) t.push(['magma_golem', 3]); return t; },
@@ -169,7 +169,7 @@ Object.assign(ENEMIES, {
 //  環境の制限はなし。敵の強さ・攻撃・ボス戦が中心。zones で階ごとに見た目と敵を切り替える
 // =====================================================================
 DUNGEONS.castle = {
-  name: '魔王城', tier: 4, bgm: 'battle', bossBgm: 'boss', jumpMul: 1,
+  name: '魔王城', tier: 4, bgm: 'castle', bossBgm: 'boss', lastBossBgm: 'maou', jumpMul: 1,
   // 外：草むら→深淵の裂け目（踏むと痛い）、キノコ→間欠泉 ／ 中：たき火→燭台（ふれると炎）
   chunks: biomeChunks({ bush: 'abyss', mushroom: 'geyser' }),
   zones: [

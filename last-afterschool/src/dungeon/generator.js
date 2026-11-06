@@ -130,7 +130,7 @@ const DungeonGen = {
 
     const ch = {
       id: `dg_${floor}`, dungeon: true, dungeonId: null, floor, title: D.name, sub: `${floor}F`, bg: D.bg,
-      bgm: isBoss ? D.bossBgm : D.bgm, terrainTheme: D.terrainTheme, jumpMul: D.jumpMul, env: D.env || null,
+      bgm: isBoss ? (floor === 10 && D.lastBossBgm) || D.bossBgm : D.bgm, terrainTheme: D.terrainTheme, jumpMul: D.jumpMul, env: D.env || null,
       depth, rooms: seq, timeLimit: D.timeLimit || null,
       loadout: { weapons: [], fire: false, partner: true, canFight: true },
       intro: [], events: [], endX: 99999, outro: [],

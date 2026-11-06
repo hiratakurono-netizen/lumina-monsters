@@ -53,6 +53,7 @@ class World {
     const P = this.player;
 
     if (this.ch.dungeon && this.feats) Gimmicks.update(this, dt);
+    if (this.spQueue && this.spQueue.length) this.updateSpecialHits(dt);
     if (this.ch.cutscene) StoryFlow.update(this, dt);
     if (!this.dialogue) {
       P.update(dt);
@@ -196,6 +197,16 @@ class World {
     if (atk.special && h === def.hits[def.hits.length - 1]) {
       const sp = def.swing && SP_FX[def.swing];
       if (sp) this.fx.push(new SpecialFx(P, def.swing, 'impact', el));   // 武器ごとの着弾 → 余韻
+      // 武器ごとの追加の連撃（HIT数と威力は SPECIAL_HITS）
+      const SH = def.swing && SPECIAL_HITS[def.swing];
+      if (SH) {
+        this.spQueue = this.spQueue || [];
+        for (let i = 0; i < SH.hits; i++) {
+          const last = i === SH.hits - 1;
+          this.spQueue.push({ t: 0.06 + i * SH.gap, n: i + 1, of: SH.hits, color: SH.color, atk: { def, key: atk.key, special: true, burst: true },
+            h: { dmg: SH.dmg, box: SH.box, kb: last ? 380 : 40, launch: last ? 260 : 0, stop: last ? 110 : 28, shake: last ? 12 : 4 } });
+        }
+      }
       else this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el));
       this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);
       Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 14);
@@ -209,7 +220,7 @@ class World {
     if (this.feats) Gimmicks.hit(this, box, el, atk.special);
     for (const pr of this.projs) if (pr.reflectable && !pr.dead && overlap(box, pr.box())) { pr.dead = true; this.spark(pr.x, pr.y, '#ffffff', 10); this.floatText(pr.x, pr.y - 20, '打ち消した！', '#bfe9ff', 13); Audio2.sfx('blip'); }
     let any = false;
-    const lvMul = 1 + (P.lv - 1) * (this.ch.dungeon ? BAL.LV_ATK : 0.08), spMul = atk.special ? SPECIAL.dmgMul : 1;
+    const lvMul = 1 + (P.lv - 1) * (this.ch.dungeon ? BAL.LV_ATK : 0.08), spMul = atk.burst ? 1 : atk.special ? (atk.key === 'kick' ? 1.8 : SPECIAL.dmgMul) : 1;
     for (const e of this.enemies) {
       if (e.dying > 0 || e.spawnT > 0.2) continue;
       if (!overlap(box, e.box())) continue;
@@ -231,8 +242,10 @@ class World {
         if (e.poise > 170 && (e.state === 'move' || e.state === 'recover')) { e.poise = 0; e.state = 'stagger'; e.st = 1.1; e.vx = P.face * 160; this.floatText(e.x, e.y - 230, 'BREAK!', '#9fe0ff', 24); if (e.moss > 0) this.stripMoss(e, 0.35); }
         if (e.moss > 0 && (e.d.moss.el === 'any' ? el !== 'none' : el === e.d.moss.el)) this.stripMoss(e, atk.special ? 0.3 : 0.1);   // 苔・氷の鎧は炎、溶岩の鎧は氷ではがれる
       } else {
-        e.vx = (Math.sign(e.x - P.x) || P.face) * (h.kb || 150) * (atk.special ? 1.4 : 1); // 主人公から離れる向きに飛ばす
-        if (h.launch) { e.vy = -h.launch; e.launched = true; e.onGround = false; }
+        // 必殺技（連撃あり）の振りの間は敵をその場に留め、最後の連撃でまとめて吹き飛ばす
+        const hold = atk.special && !atk.burst && def.swing && SPECIAL_HITS[def.swing];
+        e.vx = (Math.sign(e.x - P.x) || P.face) * (hold ? 20 : (h.kb || 150) * (atk.special ? 1.4 : 1)); // 主人公から離れる向きに飛ばす
+        if (h.launch && !hold) { e.vy = -h.launch; e.launched = true; e.onGround = false; }
         e.stun = 0.35 + (el === 'sand' ? 0.3 : 0) + (el === 'ice' ? 0.5 : 0) + (h.launch ? 0.3 : 0);   // 氷：凍えて長く止まる
         if (el === 'ice') e.chill = 2.5;
         e.state = 'move';
@@ -251,6 +264,17 @@ class World {
       this.shake = Math.max(this.shake, h.shake || (def.size === 'L' ? 8 : 3));
       Audio2.sfx(h.dmg >= 25 || atk.special ? 'hitHeavy' : 'hit');
     }
+  }
+  // 必殺技の連撃を時間どおりに当てる。最後に「◯ HIT!!」
+  updateSpecialHits(dt) {
+    const P = this.player;
+    for (const q of this.spQueue) {
+      q.t -= dt; if (q.t > 0 || q.done) continue;
+      q.done = true;
+      this.playerHit(P, q.h, q.atk);
+      if (q.n === q.of && q.of > 1) this.floatText(P.x + P.face * 120, P.y - 200, `${q.of} HIT!!`, q.color, 24);
+    }
+    this.spQueue = this.spQueue.filter(q => !q.done);
   }
   doSpecial(P) {
     // 今持っている武器で出す（机の時だけ2段目まで続ける）。武器がなければキック

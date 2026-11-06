@@ -23,11 +23,15 @@ const NAMES = {
 };
 
 // BGM（リポジトリ直下の既存楽曲を仮で流用）
+// BGM（すべてこのゲームのために作曲・合成：tools/bgm/compose_bgm.py で作り直せる）
 const BGM = {
-  morning: 'assets/bgm/03_base_morning_camp.mp3',
-  battle: 'assets/bgm/01_battle_luminous_rush.mp3',
-  boss: 'assets/bgm/02_boss_crimson_assault.mp3',
-  sorrow: 'assets/bgm/04_final_abyss_gate.mp3',
+  morning: 'assets/bgm/morning.mp3',      // 町・いつもの日常
+  battle: 'assets/bgm/battle.mp3',        // プロローグの戦い
+  boss: 'assets/bgm/boss.mp3',            // ボス戦
+  sorrow: 'assets/bgm/sorrow.mp3',        // タイトル・物語の大事な場面
+  grassland: 'assets/bgm/grassland.mp3', desert: 'assets/bgm/desert.mp3', snow: 'assets/bgm/snow.mp3',
+  volcano: 'assets/bgm/volcano.mp3', castle: 'assets/bgm/castle.mp3',
+  maou: 'assets/bgm/maou.mp3',            // 魔王戦
 };
 
 // ---------------------------------------------------------------------
@@ -99,7 +103,18 @@ const WEAPONS = {
     frameMap: [4, 5, 6, 7], frameMs: [110, 160, 200, 170], hits: [{ frame: 2, dmg: 46, box: [-20, -190, 190, 10], kb: 520, launch: 380, stop: 150, shake: 14, slam: true }], step: [40, 0, 40, 0], cancelAt: 3 },
 };
 // 必殺「フルスイング」：今持っている武器に相棒が力を込めて振り抜く
-const SPECIAL = { mp: 25, dmgMul: 1.8 };
+const SPECIAL = { mp: 25, dmgMul: 1.2 };   // dmgMul：必殺の振りそのものの当たりの倍率（武器なしのキックは 1.8）
+// 必殺技の追加の連撃（武器の種類ごと）。最後の一撃が当たった所に、hits 回の攻撃が gap 秒ごとに入る
+//   dmg＝1発の強さ（ふつうの一撃の基準が 15）、box＝当たる範囲（主人公の足元・右向き基準）
+//   合計の威力：速い武器ほど細かく多く、重い武器ほど少なく重い
+const SPECIAL_HITS = {
+  bat:    { hits: 1, dmg: 70, gap: 0,    box: [-20, -210, 250, 10],  color: '#ff7a4a' },   // 一撃必殺の大振り
+  chair:  { hits: 4, dmg: 18, gap: 0.08, box: [-60, -200, 210, 10],  color: '#ffb35a' },   // ぐるぐる4連
+  desk:   { hits: 2, dmg: 26, gap: 0.18, box: [-90, -210, 290, 10],  color: '#7fe8d0' },   // 重い2連（叩きつけ＋衝撃）
+  dagger: { hits: 8, dmg: 10,  gap: 0.045, box: [0, -180, 200, 0],     color: '#8fd8ff' },  // 細かい8連
+  sword:  { hits: 5, dmg: 18, gap: 0.065, box: [-40, -220, 260, 10], color: '#ffe27a' },   // 流星の5連
+  axe:    { hits: 3, dmg: 14, gap: 0.12, box: [-170, -210, 300, 10], color: '#c58aff' },   // 前後を巻きこむ大回転3連
+};
 // 必殺技の名前（武器の種類ごと。表記はこのまま使う）。剣は魔王剣も同じ。武器なし（キック）は「フルスイング！！」
 const SPECIAL_NAMES = {
   bat: 'ばちこーん☆インパクト！',
