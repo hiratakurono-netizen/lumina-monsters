@@ -194,7 +194,10 @@ class World {
     if (atk.key !== 'kick' && !def.smear) this.fx.push(new SlashArc(P.x + P.face * 20, cy, r, P.face, E.color, E.glow));
     // 紫の爆発エフェクトは必殺専用（その技の最後の一撃で出す）
     if (atk.special && h === def.hits[def.hits.length - 1]) {
-      this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el)); this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);
+      const sp = def.swing && SP_FX[def.swing];
+      if (sp) this.fx.push(new SpecialFx(P, def.swing, 'impact', el));   // 武器ごとの着弾 → 余韻
+      else this.fxBack.push(new Burst(P.x + P.face * 115, P.face, el));
+      this.flash = 0.5; this.shake = Math.max(this.shake, h.shake || 10);
       Audio2.sfx('slam'); this.dust(P.x + P.face * 100, GROUND_Y, 14);
       if (el === 'fire') for (let i = 0; i < 24; i++) this.spark(P.x + P.face * rand(20, 220), GROUND_Y - rand(0, 30), '#ff9a3a', 1, -rand(100, 400));
       if (el === 'sand') this.dust(P.x + P.face * 120, GROUND_Y, 20, '#d9c08c');
@@ -253,6 +256,8 @@ class World {
     // 今持っている武器で出す（机の時だけ2段目まで続ける）。武器がなければキック
     const key = P.weapon || 'kick';
     P.startAttack(key, { special: true, chainNext: null });
+    const type = WEAPONS[key] && WEAPONS[key].swing;
+    if (type && SP_FX[type]) this.fx.push(new SpecialFx(P, type, 'lead', P.element));   // 必殺：溜め → 振りのエフェクト
     P.inv = 1.6; P.setFace('fluster', 1.6);
     this.partner.glow = 1.2; this.flash = 0.35; this.hitstop = 0.12;
     this.floatText(P.x, P.y - 170, 'フルスイング！！', '#ffe27a', 26);

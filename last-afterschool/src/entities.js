@@ -1055,6 +1055,58 @@ class SwingSmear {
     ctx.restore();
   }
 }
+// ---------------------------------------------------------------------
+//  必殺技のエフェクト（武器ごとの絵：assets/fx/sp_<武器>_<番号>.png。tools/extract_specials.py で切り出し）
+//  lead＝技を出した瞬間から順に出す（溜め → 振り）、impact＝最後の一撃が当たった所で出す（着弾 → 余韻）
+//  [絵の番号, 表示の大きさ（長い辺・ゲーム座標）, 時間（秒）]
+// ---------------------------------------------------------------------
+const SP_FX = {
+  bat:    { lead: [[0, 110, 0.18], [1, 170, 0.16], [2, 300, 0.18]], impact: [3, 330, 0.36], rest: [4, 290, 0.5] },
+  chair:  { lead: [[0, 150, 0.22], [1, 220, 0.24]], impact: [2, 270, 0.36], rest: [3, 240, 0.45] },
+  desk:   { lead: [[0, 170, 0.24], [1, 290, 0.26]], impact: [2, 340, 0.4], rest: [3, 300, 0.5], ground: true },
+  dagger: { lead: [[0, 100, 0.14], [1, 260, 0.14]], impact: [2, 250, 0.32], rest: [3, 220, 0.4] },
+  sword:  { lead: [[0, 220, 0.22], [1, 290, 0.24]], impact: [2, 320, 0.4], rest: [3, 290, 0.5] },
+  axe:    { lead: [[0, 190, 0.22], [1, 330, 0.26]], impact: [2, 360, 0.36], rest: [3, 310, 0.5], ground: true },
+};
+const spFxPath = (type, i) => `assets/fx/sp_${type}_${i}.png`;
+class SpecialFx {
+  // part：'lead'（主人公についてくる）か 'impact'（当たった所に置く）
+  constructor(P, type, part, el) {
+    this.P = P; this.type = type; this.face = P.face; this.el = el || 'none'; this.t = 0; this.dead = false;
+    const D = SP_FX[type];
+    this.seq = part === 'lead' ? D.lead.map(([i, w, d]) => ({ i, w, d, kind: 'lead' })) : [{ i: D.impact[0], w: D.impact[1], d: D.impact[2], kind: 'impact' }, { i: D.rest[0], w: D.rest[1], d: D.rest[2], kind: 'rest' }];
+    this.total = this.seq.reduce((a, s) => a + s.d, 0);
+    this.x0 = P.x + P.face * 130; this.y0 = D.ground ? P.y : P.y - 72; this.ground = !!D.ground;
+  }
+  update(dt) { this.t += dt; if (this.t >= this.total) this.dead = true; }
+  draw(ctx, cam) {
+    let t = this.t, k = 0;
+    while (k < this.seq.length - 1 && t > this.seq[k].d) { t -= this.seq[k].d; k++; }
+    const S = this.seq[k], im = IMG[spFxPath(this.type, S.i)]; if (!im || !im.width) return;
+    const u = Math.min(1, t / S.d), P = this.P, f = this.face;
+    let x, y, sc = S.w / Math.max(im.width, im.height), a = 1;
+    if (S.kind === 'lead') {   // 溜めは手元、振りは前へ伸びる
+      const first = k === 0;
+      x = P.x + f * (first ? 34 : 60 + u * 90); y = P.y - (first ? 92 : 80);
+      sc *= first ? 0.7 + u * 0.4 : 0.85 + u * 0.25;
+      a = first ? Math.min(1, u * 4) : (u > 0.75 ? (1 - u) * 4 : 1);
+    } else {
+      x = this.x0; y = this.y0;
+      if (S.kind === 'impact') { sc *= 0.75 + Math.min(1, u * 3) * 0.35; a = u > 0.8 ? (1 - u) * 5 : 1; }
+      else { sc *= 1 + u * 0.15; a = 1 - u; }
+    }
+    const w = im.width * sc, h = im.height * sc;
+    ctx.save(); ctx.globalAlpha *= Math.max(0, a); ctx.imageSmoothingEnabled = false;
+    ctx.translate(Math.round(x - cam), Math.round(y)); ctx.scale(f, 1);
+    ctx.drawImage(im, -w / 2, this.ground && S.kind !== 'lead' ? -h + 8 : -h / 2, w, h);
+    ctx.restore();
+    if (S.kind === 'impact' && this.el !== 'none' && ELEMENTS[this.el]) {   // 武器の属性の色をうっすら重ねる
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35 * (1 - u);
+      const e = ELEMENTS[this.el], g = ctx.createRadialGradient(x - cam, y, 10, x - cam, y, 180);
+      g.addColorStop(0, e.color); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x - cam - 200, y - 200, 400, 400); ctx.restore();
+    }
+  }
+}
 class Burst {
   constructor(x, face, element) { this.x = x; this.face = face; this.el = element; this.life = 0.42; this.max = 0.42; }
   update(dt) { this.life -= dt; this.dead = this.life <= 0; }

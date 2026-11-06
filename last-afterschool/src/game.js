@@ -583,6 +583,7 @@ function loadAll() {
   Object.values(ENV).forEach(p => paths.add(p)); Object.values(ITEM_ICON).forEach(p => paths.add(p));
   if (SPRITE_DATA.friend) { paths.add(SPRITE_DATA.friend.stand.img); Object.values(SPRITE_DATA.friend.faces).forEach(p => paths.add(p)); }
   Object.values(WEAPON_ART).forEach(w => paths.add(w.file));
+  for (const [type, D] of Object.entries(SP_FX)) { const n = Math.max(D.lead.length ? D.lead[D.lead.length - 1][0] : 0, D.impact[0], D.rest[0]) + 1; for (let i = 0; i < n; i++) paths.add(spFxPath(type, i)); }   // 必殺技のエフェクト
   return Promise.all([...paths].map(p => new Promise(res => { const i = new Image(); i.onload = i.onerror = () => res(); i.src = (window.ASSET_MAP && window.ASSET_MAP[p]) || p; IMG[p] = i; })));
 }
 
