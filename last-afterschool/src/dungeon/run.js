@@ -17,6 +17,7 @@ const DungeonFlow = {
   },
   startFloor() {
     const ch = DungeonGen.build(this.run); ch.dungeonId = ch.dungeonId || this.run.id;
+    if (typeof StoryFlow !== 'undefined') StoryFlow.attach(this, ch);   // 到着・10階ボス戦前後の会話
     if (ch.timeLimit) this.run.timeLeft = ch.timeLimit;   // 火山：階ごとに制限時間
     this.world = new World(ch, this.save, this);
     const d = this.dg(); d.best = Math.max(d.best || 0, this.run.floor); Save.store(this.save);
@@ -31,8 +32,9 @@ const DungeonFlow = {
     if (this.run.id === 'endless') return this.endlessCleared(W);
     if (this.run.id === 'bossrush') return this.bossrushCleared(W);
     const f = this.run.floor, d = this.dg(), name = DUNGEONS[this.run.id].name;
-    if (f === 10 && this.run.id === 'castle') {   // 最終ダンジョン：魔王を倒した（エンディングは今後のストーリーで作る：仮）
-      d.cleared = true; Save.store(this.save);
+    if (f === 10 && this.run.id === 'castle') {   // 最終ダンジョン：魔王を倒した。初めての時はエンディングへ
+      const first = !d.cleared; d.cleared = true; Save.store(this.save);
+      if (first && typeof StoryFlow !== 'undefined') return StoryFlow.startEnding(this);
       return this.returnToTown([
         L('narr', '魔王の体が、ゆっくりと闇にほどけていく。'),
         L('partner', '……終わった、の？'),

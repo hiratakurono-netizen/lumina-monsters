@@ -86,7 +86,7 @@ const Town = {
         sign(x, G - 168, '鍛冶屋（準備中）', '#c9bfd6');
       } else if (f.id === 'mio') {
         this.drawMio(ctx, x, G, t);
-        ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffd6e6'; ctx.textAlign = 'center'; ctx.fillText(NAMES.friend, x, G - 170); ctx.textAlign = 'left';
+        ctx.font = `14px ${FONT}`; ctx.fillStyle = '#ffd6e6'; ctx.textAlign = 'center'; ctx.fillText(NAMES.friend, x, G - 175); ctx.textAlign = 'left';
       } else if (f.id === 'gate' && IMG[ENV.school] && IMG[ENV.school].width) {
         const hh = art('school', x, 2.3 / FZ);
         const a = 0.35 + Math.sin(t * 2.4) * 0.12;
@@ -117,12 +117,16 @@ const Town = {
   // 友人ミオ：専用の絵がまだないので、主人公の待機絵を暗い色に染めた仮の姿（仮実装）
   _mio: null,
   // 親友ミオ：立ち姿3ポーズをゆっくり切り替える
-  drawMio(ctx, x, G, t) {
+  // 主人公と同じ縮尺（HERO_SCALE・HERO_SIZE）で描く。主人公より少しだけ小柄
+  MIO_K: HERO_SCALE * HERO_SIZE * 0.97,
+  drawMio(ctx, x, G, t, flip) {
     const set = SPRITE_DATA.friend.stand, img = IMG[set.img];
     if (!img || !img.width) return;
-    const f = set.frames[[0, 1, 0, 2][Math.floor(t / 2.4) % 4]], sc = set.scale, bob = Math.sin(t * 2) * 1;
-    ctx.fillStyle = 'rgba(10,0,20,.3)'; ctx.beginPath(); ctx.ellipse(x, G + 2, 26, 6, 0, 0, 7); ctx.fill();
-    ctx.drawImage(img, f.x, f.y, f.w, f.h, Math.round(x - f.ax * sc), Math.round(G - f.ay * sc + bob), f.w * sc, f.h * sc);
+    const f = set.frames[[0, 1, 0, 2][Math.floor(t / 2.4) % 4]], sc = set.scale * this.MIO_K, bob = Math.sin(t * 2) * 1;
+    ctx.fillStyle = 'rgba(10,0,20,.3)'; ctx.beginPath(); ctx.ellipse(x, G + 2, 30, 7, 0, 0, 7); ctx.fill();
+    ctx.save(); ctx.translate(Math.round(x), 0); if (flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, f.x, f.y, f.w, f.h, Math.round(-f.ax * sc), Math.round(G - f.ay * sc + bob), f.w * sc, f.h * sc);
+    ctx.restore();
   },
   drawHud(ctx, W, save) {
     panel(ctx, 14, 12, 300, 58, 'rgba(18,12,34,.85)', '#8f7fd0');

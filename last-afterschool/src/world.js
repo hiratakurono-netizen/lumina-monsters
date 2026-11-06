@@ -27,14 +27,14 @@ class World {
   begin() {
     Audio2.playBgm(this.ch.bgm);
     this.say(this.ch.intro, () => {
-      if (this.ch.storyOnly) return this.finish();
+      if (this.ch.storyOnly || this.ch.cutscene) return this.finish();
       this.state = 'play';
     });
   }
   finish() {
     if (this.endTriggered) return; this.endTriggered = true;
     this.state = 'outro'; this.player.locked = true;
-    const done = () => this.game.chapterClear(this);
+    const done = () => (this.ch.onDone ? this.ch.onDone(this) : this.game.chapterClear(this));
     if (this.ch.outro && this.ch.outro.length) this.say(this.ch.outro, done); else done();
   }
   onPlayerDown() {
@@ -53,6 +53,7 @@ class World {
     const P = this.player;
 
     if (this.ch.dungeon && this.feats) Gimmicks.update(this, dt);
+    if (this.ch.cutscene) StoryFlow.update(this, dt);
     if (!this.dialogue) {
       P.update(dt);
       if (this.state === 'play') this.checkEvents();
@@ -100,7 +101,7 @@ class World {
       if (ev.type === 'talk' && P.x >= ev.x) { ev.done = true; this.say(ev.lines); return; }
       if (ev.type === 'wave' && P.x >= ev.x) { ev.done = true; this.startWave(ev); return; }
       if (ev.type === 'boss' && P.x >= ev.x) { ev.done = true; this.startBoss(ev); return; }
-      if (ev.type === 'boss_dg' && P.x >= ev.x) { ev.done = true; this.startBossDg(); return; }
+      if (ev.type === 'boss_dg' && P.x >= ev.x) { ev.done = true; if (this.ch.bossPre) { P.vx = 0; this.say(this.ch.bossPre, () => this.startBossDg()); } else this.startBossDg(); return; }   // 10階ボス：戦う前の会話
     }
     if (!this.wave && P.x >= this.ch.endX) this.finish();
   }
@@ -277,7 +278,7 @@ class World {
       this.slowmo = 1.8; this.flash = 1; this.shake = 24; Audio2.sfx('slam');
       for (let i = 0; i < 60; i++) this.fx.push(new Particle({ x: e.x + rand(-90, 90), y: e.y - rand(0, 180), vx: rand(-300, 300), vy: rand(-500, -100), g: 900, life: rand(0.8, 1.6), size: rand(6, 14), color: ['#7d7488', '#a49ab0', '#5d556a'][i % 3] }));
       this.projs = [];
-      setTimeout(() => { this.wave = null; this.boss = null; if (this.ch.dungeon) { this.camLock = null; this.bossDefeated = true; this.goArrow = 3; } else this.finish(); }, 2600);
+      setTimeout(() => { this.wave = null; this.boss = null; if (this.ch.dungeon) { this.camLock = null; this.bossDefeated = true; this.goArrow = 3; if (this.ch.bossPost) this.say(this.ch.bossPost, () => { if (this.ch.dungeonId === 'castle') { this.exitUsed = true; this.game.floorCleared(this); } }); } else this.finish(); }, 2600);   // 10階ボス：倒した後の会話（魔王はそのままエンディングへ）
     }
   }
 
@@ -550,7 +551,8 @@ class World {
     if (this.feats) Gimmicks.drawBack(this, ctx, cam);
     this.terrain.draw(ctx, cam);
     if (this.objs && this.objs.length) this.drawObjs(ctx, cam);
-    if (this.ch.town) Town.drawFacilities(ctx, cam, this);
+    if (this.ch.town || this.ch.showTown) Town.drawFacilities(ctx, cam, this);
+    if (this.ch.cutscene) StoryFlow.drawBack(this, ctx, cam);
     this.drawProps(ctx, cam);
     this.drawItems(ctx, cam);
     for (const f of this.fxBack) f.draw(ctx, cam);
@@ -562,6 +564,7 @@ class World {
     if (this.feats) Gimmicks.drawFront(this, ctx, cam);
     for (const f of this.fxTop) f.draw(ctx, cam);
     ctx.restore();
+    if (this.ch.cutscene) StoryFlow.drawTint(this, ctx);
     if (this.flash > 0) { ctx.fillStyle = `rgba(255,248,255,${Math.min(0.75, this.flash)})`; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }
   }
   drawItems(ctx, cam) {
@@ -621,27 +624,28 @@ const Icons = {
 const Props = {
   cat(ctx, x, t) {
     const R = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x + a), b, w, h); };
-    const y = GROUND_Y - 34;
+    const y = GROUND_Y;   // 地面に座らせる（以前は34px浮いていた）
     R('#2e2838', -14, y - 12, 26, 12); R('#2e2838', 6, y - 22, 12, 12); R('#2e2838', 6, y - 26, 3, 4); R('#2e2838', 15, y - 26, 3, 4);
     R('#ffe27a', 9, y - 18, 2, 2); R('#ffe27a', 14, y - 18, 2, 2);
     const tw = Math.sin(t * 3) * 4; R('#2e2838', -18, y - 14 - tw, 4, 10);
   },
   tv(ctx, x, t) {
-    const R = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x + a), b, w, h); };
+    const R = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x + a), b + 40, w, h); };   // 地面まで下げる（以前は40px浮いていた）
+    R('#3a3248', -66, GROUND_Y - 86, 8, 46); R('#3a3248', 58, GROUND_Y - 86, 8, 46);   // 脚
     R('#4d4560', -70, GROUND_Y - 190, 140, 150); R('#9fb6d8', -62, GROUND_Y - 182, 124, 70);
     R('#2a2433', -54, GROUND_Y - 176, 60, 44); R('#d56a5a', -50, GROUND_Y - 170, 50, 26);
     R('#ffd36a', -48, GROUND_Y - 168, 30 + Math.sin(t * 2) * 6, 4);
     R('#2a2433', 12, GROUND_Y - 176, 44, 44); R('#7aa6d8', 16, GROUND_Y - 170, 36, 32);
     R('#e9e2f0', -62, GROUND_Y - 100, 124, 14);
-    ctx.fillStyle = '#4d4560'; ctx.font = '11px DotGothic16, monospace'; ctx.fillText('でんきのミヤタ', x - 48, GROUND_Y - 89);
+    ctx.fillStyle = '#4d4560'; ctx.font = '11px DotGothic16, monospace'; ctx.fillText('でんきのミヤタ', x - 48, GROUND_Y - 49);
   },
   shop(ctx, x) {
-    const R = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x + a), b, w, h); };
+    const R = (c, a, b, w, h) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x + a), b + 34, w, h); };   // 地面まで下げる（以前は34px浮いていた）
     for (let i = 0; i < 7; i++) R(i % 2 ? '#fff' : '#f39ab8', -70 + i * 20, GROUND_Y - 180, 20, 26);
     R('#f6e6d6', -66, GROUND_Y - 154, 132, 120); R('#8a6a5a', -66, GROUND_Y - 40, 132, 6);
     R('#ffd6a0', -40, GROUND_Y - 130, 20, 36); R('#ff9ec0', -40, GROUND_Y - 134, 20, 10);
-    ctx.fillStyle = '#c0567a'; ctx.font = '12px DotGothic16, monospace'; ctx.fillText('CRÊPE', x - 6, GROUND_Y - 110);
-    ctx.fillText('新作!', x - 2, GROUND_Y - 92);
+    ctx.fillStyle = '#c0567a'; ctx.font = '12px DotGothic16, monospace'; ctx.fillText('CRÊPE', x - 6, GROUND_Y - 76);
+    ctx.fillText('新作!', x - 2, GROUND_Y - 58);
   },
   crack() {},
 };

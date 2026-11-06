@@ -48,7 +48,7 @@ class Dialogue {
     const x = 40, y = VIEW_H - 170, w = VIEW_W - 80, h = 150;
     panel(ctx, x, y, w, h, 'rgba(22,16,40,.93)', '#b9a2ff');
     let tx = x + 26;
-    const name = { hero: NAMES.hero, partner: NAMES.partner, friend: NAMES.friend, news: 'ニュース', '???': '？？？' }[L.who] || '';
+    const name = { hero: NAMES.hero, partner: NAMES.partner, friend: NAMES.friend, news: 'ニュース', '???': '？？？', king: '魔王' }[L.who] || '';
     if (L.who === 'hero') {
       const img = IMG[SPRITE_DATA.portraits[L.face || 'default']];
       panel(ctx, x + 14, y + 14, 122, 122, '#2a2140', '#e0d0ff');
@@ -67,7 +67,7 @@ class Dialogue {
       panel(ctx, tx - 6, y - 18, ctx.measureText(name).width + 60, 32, '#3b2d63', '#e0d0ff');
       ctx.font = `17px ${FONT}`; ctx.fillStyle = '#fff'; ctx.fillText(name, tx + 10, y + 4);
     }
-    ctx.font = `20px ${FONT}`; ctx.fillStyle = L.who === 'news' ? '#bfe3ff' : L.who === 'friend' ? '#ffd6e6' : '#f4eeff';
+    ctx.font = `20px ${FONT}`; ctx.fillStyle = L.who === 'news' ? '#bfe3ff' : L.who === 'friend' ? '#ffd6e6' : L.who === 'king' ? '#e0b8ff' : '#f4eeff';
     const rightFace = L.who === 'partner' || L.who === '???' || (L.who === 'friend' && SPRITE_DATA.friend && !L.text.startsWith('📱'));
     const maxW = rightFace ? w - 190 : x + w - tx - 30;
     wrap(ctx, text, tx, y + 50, maxW, 32);
@@ -436,7 +436,7 @@ const Game = {
     const W = this.world; W.draw(ctx);
     if (W.ch.storyOnly) this.drawStoryOverlay(W);
     if (W.ch.town) Town.drawHud(ctx, W, this.save);
-    else if (!W.ch.storyOnly) drawHud(ctx, W);
+    else if (!W.ch.storyOnly && !W.ch.cutscene) drawHud(ctx, W);
     if (W.dialogue) W.dialogue.draw(ctx, W.player);
     if (this.paused) {
       ctx.fillStyle = 'rgba(8,4,16,.7)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
