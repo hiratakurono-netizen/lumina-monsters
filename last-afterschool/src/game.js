@@ -228,7 +228,7 @@ const Game = {
     }
     this.fade = Math.max(0, this.fade - dt * 1.6);
     const S = this['u_' + this.scene]; if (S) S.call(this, dt);
-    document.body.classList.toggle('title-scene', this.scene === 'title' && !this.sub);
+    document.body.classList.toggle('title-scene', this.scene === 'title' && !this.sub && !UI.isOpen);
     document.body.classList.toggle('town', (this.scene === 'play' || this.scene === 'card') && !!(this.world && this.world.ch.town));
     document.body.classList.toggle('dungeon', this.scene === 'play' && !!(this.world && this.world.ch.dungeon));
     this.tapAt = null;
@@ -449,13 +449,13 @@ const Game = {
   },
   // ---------- options（タイトルとポーズの両方から開く） ----------
   // 行: 0=BGM, 1=効果音, 2=もどる。←→で音量（10段階）、タップは ◀ ▶ かバーの位置
-  OPT: { x: 240, y: 130, w: 480, h: 280, rows: [210, 280, 360], barX: 420, barW: 200 },
+  OPT: { x: 240, y: 110, w: 480, h: 330, rows: [190, 250, 315, 385], barX: 420, barW: 200 },
   updateOptions(tap) {
     const O = this.OPT;
     const get = i => (i === 0 ? Audio2.bgmVol : Audio2.sfxVol);
     const set = (i, v) => { if (i === 0) Audio2.setBgm(v); else { Audio2.setSfx(v); Audio2.sfx('hit'); } };
-    if (Input.hit('up')) { this.optIdx = (this.optIdx + 2) % 3; Audio2.sfx('blip'); }
-    if (Input.hit('down')) { this.optIdx = (this.optIdx + 1) % 3; Audio2.sfx('blip'); }
+    if (Input.hit('up')) { this.optIdx = (this.optIdx + 3) % 4; Audio2.sfx('blip'); }
+    if (Input.hit('down')) { this.optIdx = (this.optIdx + 1) % 4; Audio2.sfx('blip'); }
     if (this.optIdx < 2) {
       if (Input.hit('left')) set(this.optIdx, get(this.optIdx) - 0.1);
       if (Input.hit('right')) set(this.optIdx, get(this.optIdx) + 0.1);
@@ -463,15 +463,17 @@ const Game = {
     if (tap) {
       if (tap.x < O.x || tap.x > O.x + O.w || tap.y < O.y || tap.y > O.y + O.h) { Audio2.sfx('select'); return true; }
       const i = O.rows.findIndex(y => Math.abs(tap.y - y) < 28);
-      if (i === 2) { Audio2.sfx('select'); return true; }
-      if (i >= 0) {
+      if (i === 3) { Audio2.sfx('select'); return true; }
+      if (i === 2) { Audio2.sfx('select'); Town.openTransfer(this); return true; }   // 引き継ぎコード
+      if (i >= 0 && i < 2) {
         this.optIdx = i;
         if (tap.x < O.barX - 4) set(i, get(i) - 0.1);
         else if (tap.x > O.barX + O.barW + 4) set(i, get(i) + 0.1);
         else set(i, Math.ceil((tap.x - O.barX) / O.barW * 10) / 10);
       }
     }
-    if (Input.hit('pause') || Input.hit('kick') || (Input.confirm() && this.optIdx === 2)) { Audio2.sfx('select'); return true; }
+    if (Input.hit('pause') || Input.hit('kick') || (Input.confirm() && this.optIdx === 3)) { Audio2.sfx('select'); return true; }
+    if (Input.confirm() && this.optIdx === 2) { Audio2.sfx('select'); Town.openTransfer(this); return true; }
     return false;
   },
   drawOptions() {
@@ -494,9 +496,11 @@ const Game = {
       ctx.font = `14px ${FONT}`; ctx.fillStyle = '#cfc3ea'; ctx.textAlign = 'left';
       ctx.fillText(String(Math.round(v * 10)), O.barX + O.barW + 44, y + 6);
     });
-    const on = this.optIdx === 2;
-    ctx.font = `19px ${FONT}`; ctx.fillStyle = on ? '#ffe9a8' : '#e0d6ff'; ctx.textAlign = 'center';
-    ctx.fillText((on ? '▶ ' : '') + 'もどる', O.x + O.w / 2, O.rows[2] + 7);
+    ['引き継ぎコード（書き出し・読み込み）', 'もどる'].forEach((t, k) => {
+      const on = this.optIdx === k + 2;
+      ctx.font = `19px ${FONT}`; ctx.fillStyle = on ? '#ffe9a8' : '#e0d6ff'; ctx.textAlign = 'center';
+      ctx.fillText((on ? '▶ ' : '') + t, O.x + O.w / 2, O.rows[k + 2] + 7);
+    });
     ctx.font = `12px ${FONT}`; ctx.fillStyle = '#8c80b0';
     ctx.fillText(IS_TOUCH ? '◀ ▶ かバーをタップで調整' : '↑↓ 選択　←→ 音量', O.x + O.w / 2, O.y + O.h - 14);
     ctx.textAlign = 'left';

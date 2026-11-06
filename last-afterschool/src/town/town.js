@@ -282,23 +282,43 @@ const Town = {
     const saveTab = el => {
       el.append(h('button', { class: 'ui-btn', onclick: () => { this.save(game); UI.toast('保存しました'); } }, '保存する'));
       el.append(h('div', { class: 'ui-note' }, '町に戻った時や買い物の時にも自動で保存されます。iPhone の Safari は、しばらく開かないと保存データが消えることがあります。下の「書き出す」で出る文字列をメモ帳などに保管しておくと安心です。'));
-      const out = h('textarea', { class: 'ui-text', readonly: true, 'aria-label': 'セーブデータの文字列' });
-      el.append(h('div', { class: 'ui-h' }, '書き出し'), h('button', { class: 'ui-btn ghost', onclick: async () => {
-        out.value = Save.exportCode(s); out.select();
-        try { await navigator.clipboard.writeText(out.value); UI.toast('コピーしました'); } catch (e) { UI.toast('文字列を長押ししてコピーしてください'); }
-      } }, '書き出してコピー'), out);
-      const inp = h('textarea', { class: 'ui-text', placeholder: 'LA2: で始まる文字列を貼り付け', 'aria-label': '読み込むセーブデータ' });
-      const msg = h('div', { class: 'ui-note' });
-      el.append(h('div', { class: 'ui-h' }, '読み込み（今のデータは上書きされます）'), inp, h('button', { class: 'ui-btn ghost', onclick: () => {
-        try { const d = Save.importCode(inp.value); Object.keys(s).forEach(k => delete s[k]); Object.assign(s, d); this.save(game); msg.textContent = '読み込みました。'; UI.toast('読み込みました'); }
-        catch (e) { msg.textContent = '読み込めませんでした：' + e.message; }
-      } }, '読み込む'), msg);
+      this.transferPanel(game, el);
     };
     st8.sel = null; st8.multi = false; st8.picked.clear(); st8.confirm = false;
     if (field) UI.open({ title: '道具', wide: true, headRight: this.goldHead(game), tabs: [{ label: '持ち物', render: dollTab }, { label: 'ステータス', render: statusTab }] });
     else UI.open({ title: '自宅', wide: true, headRight: this.goldHead(game), tabs: [
       { label: '装備・持ち物', render: dollTab }, { label: 'ステータス', render: statusTab }, { label: 'セーブ', render: saveTab }] });
   },
+
+  // ---- 引き継ぎコード（設定画面と自宅のセーブから開く） ----
+  // 書き出し：セーブを文字列にしてコピー。読み込み：貼り付けた文字列で上書き（確認あり）
+  transferPanel(game, el) {
+    const h = UI.h, st = this._xfer = this._xfer || {};
+    el.append(h('div', { class: 'ui-note' }, `iPhone・iPad の Safari（特に埋め込みの中）では、保存データが消えることがあります。下の文字列をメモ帳などに保管しておけば、いつでも元に戻せます。最後に保存した時刻：${Save.stamp(game.save)}`));
+    const out = h('textarea', { class: 'ui-text', readonly: true, 'aria-label': '引き継ぎコード' });
+    el.append(h('div', { class: 'ui-h' }, '書き出し'), h('button', { class: 'ui-btn ghost', onclick: async () => {
+      Save.save(game.save); out.value = Save.exportCode(game.save); out.select();
+      try { await navigator.clipboard.writeText(out.value); UI.toast('コピーしました'); } catch (e) { UI.toast('文字列を長押ししてコピーしてください'); }
+    } }, '書き出してコピー'), out);
+    const inp = h('textarea', { class: 'ui-text', placeholder: 'LA2: で始まる引き継ぎコードを貼り付け', 'aria-label': '読み込む引き継ぎコード' });
+    if (st.code) inp.value = st.code;
+    inp.addEventListener('input', () => { st.code = inp.value; st.ask = null; });
+    const msg = h('div', { class: 'ui-note' }, st.msg || '');
+    el.append(h('div', { class: 'ui-h' }, '読み込み'), inp);
+    if (!st.ask) el.append(h('button', { class: 'ui-btn ghost', onclick: () => {
+      try { st.ask = Save.importCode(inp.value); st.code = inp.value; st.msg = ''; } catch (e) { st.msg = '読み込めませんでした：' + e.message; }
+      UI.render();
+    } }, '読み込む'));
+    else {   // 確認：今のデータは上書きされる
+      const d = st.ask;
+      el.append(h('div', { class: 'ui-warn' }, `今のデータは上書きされます。よろしいですか？\n読み込むデータ：Lv ${d.lv}・所持金 ${d.gold || 0} G・保存 ${Save.stamp(d)}\n今のデータ　　：Lv ${game.save.lv}・所持金 ${game.save.gold || 0} G・保存 ${Save.stamp(game.save)}`),
+        h('div', { class: 'd-acts' }, [
+          h('button', { class: 'ui-btn danger', onclick: () => { const s = game.save; Object.keys(s).forEach(k => delete s[k]); Object.assign(s, d); Save.save(s); st.ask = null; st.code = ''; st.msg = '読み込みました。'; UI.toast('読み込みました'); UI.render(); } }, '上書きして読み込む'),
+          h('button', { class: 'ui-btn ghost', onclick: () => { st.ask = null; UI.render(); } }, 'やめる')]));
+    }
+    el.append(msg);
+  },
+  openTransfer(game) { this._xfer = {}; UI.open({ title: '引き継ぎコード', tabs: [{ label: '', render: el => this.transferPanel(game, el) }] }); },
 
   // 選んだ物の詳細と操作（装備・はずす・比較）
   homeDetail(game, st8, k) {
